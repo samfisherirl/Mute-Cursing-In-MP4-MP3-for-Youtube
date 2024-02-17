@@ -5,6 +5,11 @@
 - FileSelect transcript and or mp3 file
 - output to same relative path
 
+## Requires 
+
+Python 3.10
+run one-click-installer.bat
+
 ## Concept
 
 1) intake mp4 video
