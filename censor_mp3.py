@@ -1,6 +1,3 @@
-# Ensure librosa is installed:
-# pip install librosa
-
 import librosa
 import stable_whisper
 import librosa.display
