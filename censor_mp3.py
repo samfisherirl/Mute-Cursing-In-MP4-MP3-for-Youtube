@@ -46,7 +46,7 @@ def load_transcript():
     return None
 
 
-def select_audio_file():
+def select_video_file():
     # File dialog to select an audio file
     audio_path = filedialog.askopenfilename(
         title='Select Audio File',
@@ -138,17 +138,13 @@ if __name__ == '__main__':
     root = Tk()
     root.withdraw()  # Hide the main window
     transcript_file = load_transcript()
-    audio_file = select_audio_file()
-        
+    input_video_path = select_video_file()
     # Replace 'input.mp4' with the path to your MP4 file
-    input_video_path = audio_file
     # Replace 'output.mp3' with the desired output MP3 file path
     output_audio_path = 'output.mp3'
-
     video_clip = VideoFileClip(input_video_path)
     audio_clip = video_clip.audio
     audio_clip.write_audiofile(output_audio_path)
-
     audio_clip.close()
     video_clip.close()
     # Bind the close event to the on_close function
