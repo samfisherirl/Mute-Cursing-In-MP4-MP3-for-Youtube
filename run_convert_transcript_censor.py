@@ -15,6 +15,9 @@ import csv
 import random
 from pathlib import Path
 from nltk.stem import WordNetLemmatizer
+from moviepy.editor import *
+
+
 
 lemmatizer = WordNetLemmatizer()
 
@@ -36,7 +39,7 @@ def read_curse_words_from_csv(csv_file_path):
 
 def load_transcript():
     # Ask the user if they want to load an existing transcript
-    if messagebox.askyesno('Load Transcript', 'Do you want to load an existing transcript?'):
+    if messagebox.askyesno('Load Transcript', 'If this program crashed, it saves the transcript to ensure it doesn\'t require restarting. Do you want to load an existing transcript?'):
         # File dialog to select a transcript JSON file
         transcript_path = filedialog.askopenfilename(
             title='Select Transcript File',
@@ -48,11 +51,11 @@ def load_transcript():
     return None
 
 
-def select_audio_file():
+def select_video_file():
     # File dialog to select an audio file
     audio_path = filedialog.askopenfilename(
         title='Select Audio File',
-        filetypes=[('Audio files', '*.mp3 *.wav')]
+        filetypes=[('Audio files', '*.mp3 *.wav *.mp4')]
     )
     if audio_path:
         print(f'Audio file selected: {audio_path}')
@@ -120,10 +123,11 @@ def main(transcript_file, audio_file):
         # Define a list of curse words to mute
         # Path to your saved JSON transcript file
         transcript_file = f'transcription{r}.json'
+        
     results = load_saved_transcript(transcript_file)
     audio_data, sample_rate = librosa.load(audio_file, sr=None)
     # Mute the curse words in the audio
-    curses = read_curse_words_from_csv(Path.cwd() / "curse_words.csv")
+    curses = read_curse_words_from_csv(Path.cwd() / "cleaned_output.csv")
     curse_words_set = set(curses)
 
     muted_audio = mute_curse_words(
@@ -133,12 +137,29 @@ def main(transcript_file, audio_file):
     complete_name = f"{outfile}muted_audio.mp3"
     complete = parent / complete_name
     sf.write(complete, muted_audio, sample_rate)
+    return complete_name
 
 if __name__ == '__main__':
     # Load the model
     root = Tk()
     root.withdraw()  # Hide the main window
     transcript_file = load_transcript()
-    audio_file = select_audio_file()
+    input_video_path = select_video_file()
+        
+    # Replace 'output.mp3' with the desired output MP3 file path
+    output_audio_path = 'output.mp3'
+    # Replace 'input_video.mp4' with the path to your MP4 file
+    new_audio_path = 'new_audio.mp3'
+    # Replace 'output_video.mp4' with the desired output MP4 file path
+    output_video_path = 'output_video.mp4'
+    # Load the video file
+    video_clip = VideoFileClip(input_video_path)
+    # Load the new audio file
+    new_audio_path = main(transcript_file, output_audio_path)
+    new_audio_clip = AudioFileClip(new_audio_path)
+    final_video = video_clip.set_audio(new_audio_clip)
+    final_video.write_videofile(output_video_path, codec='libx264', audio_codec='aac')
+    # Close the clips
+    new_audio_clip.close()
+    video_clip.close()
     # Bind the close event to the on_close function
-    main(transcript_file, audio_file)
