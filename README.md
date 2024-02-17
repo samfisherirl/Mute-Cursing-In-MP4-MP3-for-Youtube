@@ -7,8 +7,8 @@
 
 ## Requires 
 
-Python 3.10
-run one-click-installer.bat
+- Python 3.10
+- run one-click-installer.bat
 
 ## Concept
 
