@@ -1,3 +1,6 @@
+# Ensure librosa is installed:
+# pip install librosa
+
 import librosa
 import stable_whisper
 import librosa.display
@@ -12,7 +15,6 @@ import csv
 import random
 from pathlib import Path
 from nltk.stem import WordNetLemmatizer
-from moviepy.editor import *
 
 lemmatizer = WordNetLemmatizer()
 
@@ -34,7 +36,7 @@ def read_curse_words_from_csv(csv_file_path):
 
 def load_transcript():
     # Ask the user if they want to load an existing transcript
-    if messagebox.askyesno('Load Transcript', 'If this program crashed, it saves the transcript to ensure it doesn\'t require restarting. Do you want to load an existing transcript?'):
+    if messagebox.askyesno('Load Transcript', 'Do you want to load an existing transcript?'):
         # File dialog to select a transcript JSON file
         transcript_path = filedialog.askopenfilename(
             title='Select Transcript File',
@@ -46,11 +48,11 @@ def load_transcript():
     return None
 
 
-def select_video_file():
+def select_audio_file():
     # File dialog to select an audio file
     audio_path = filedialog.askopenfilename(
         title='Select Audio File',
-        filetypes=[('Audio files', '*.mp3 *.wav *.mp4')]
+        filetypes=[('Audio files', '*.mp3 *.wav')]
     )
     if audio_path:
         print(f'Audio file selected: {audio_path}')
@@ -107,7 +109,9 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
 
 
 def main(transcript_file, audio_file):
-    if not transcript_file:
+    if transcript_file:
+        results = load_saved_transcript(transcript_file)
+    else:
         # Load your audio file
         model = stable_whisper.load_model('base')
         # Transcribe the audio file
@@ -117,9 +121,9 @@ def main(transcript_file, audio_file):
         result.save_as_json(f'transcription{r}.json')
         # Define a list of curse words to mute
         # Path to your saved JSON transcript file
-        transcript_file = f'transcription{r}.json'
-        
-    results = load_saved_transcript(transcript_file)
+        transcript_path = f'transcription{r}.json'
+        # Load the transcript
+        results = load_saved_transcript(transcript_path)
     audio_data, sample_rate = librosa.load(audio_file, sr=None)
     # Mute the curse words in the audio
     curses = read_curse_words_from_csv(Path.cwd() / "cleaned_output.csv")
@@ -127,7 +131,7 @@ def main(transcript_file, audio_file):
 
     muted_audio = mute_curse_words(
         audio_data, sample_rate, results, curse_words_set)
-    outfile = Path(audio_file).stem
+    outfile = Path(audio_file).name
     parent = Path(audio_file).parent
     complete_name = f"{outfile}muted_audio.mp3"
     complete = parent / complete_name
@@ -138,14 +142,6 @@ if __name__ == '__main__':
     root = Tk()
     root.withdraw()  # Hide the main window
     transcript_file = load_transcript()
-    input_video_path = select_video_file()
-    # Replace 'input.mp4' with the path to your MP4 file
-    # Replace 'output.mp3' with the desired output MP3 file path
-    output_audio_path = 'output.mp3'
-    video_clip = VideoFileClip(input_video_path)
-    audio_clip = video_clip.audio
-    audio_clip.write_audiofile(output_audio_path)
-    audio_clip.close()
-    video_clip.close()
+    audio_file = select_audio_file()
     # Bind the close event to the on_close function
-    main(transcript_file, 'output.mp3')
+    main(transcript_file, audio_file)
