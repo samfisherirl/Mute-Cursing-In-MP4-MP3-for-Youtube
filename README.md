@@ -10,15 +10,17 @@
 - Python 3.10
 - run one-click-installer.bat
 
-## Concept
+## Concept 
 
-1) intake mp4 video
-2) convert to mp3
-3) read mp3 transcript with wisper
-4) read csv of curse words
-5) if word in sentence then silence word
-6) convert back to mp3
-7) add mp3 to mp4 and encode
+1) convert mp3
+2) read mp3 transcript with wisper
+3) read csv of curse words
+4) if word in sentence then silence word
+5) convert back to mp3
+
+## To add
+
+1) Convert from mp4
    
 
 ### Concerns:
