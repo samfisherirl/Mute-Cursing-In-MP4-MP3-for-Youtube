@@ -130,20 +130,11 @@ def is_curse_word(word, curse_words_set):
                 
 #     return audio_data_muted
 
-
 def split_silence(sample_rate, word):
     # Calculate the start and end sample indices
     start_sample = int(word['start'] * sample_rate)
     end_sample = int(word['end'] * sample_rate)
-
-    # Check if the duration is less than 0.3 seconds
-    if (end_sample - start_sample) < int(0.3 * sample_rate):
-        # Calculate the middle point of the word
-        middle_sample = (start_sample + end_sample) // 2
-        # Expand the start and end to cover 0.5 seconds total duration
-        start_sample = max(0, middle_sample - int(0.25 * sample_rate))
-        end_sample = middle_sample + int(0.25 * sample_rate)
-
+    # Append the tuple of start and end indices to the list
     return start_sample, end_sample
 
 def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_list):
@@ -155,13 +146,16 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
     # Initialize an empty list to store the start and end sample indices for muting
     mute_indices = []
     # Go through each segment in the transcription result
-    for segment in transcription_result['segments']:
+    for segmentA, segmentB in zip(transcription_result['ori_dict']['segments'], transcription_result['segments']):
         # Go through each word in the segment
-        for word in segment['words']:
+        for wordA, wordB in zip(segmentA['words'], segmentB['words']):
             # Check if the word is in the curse words set
-            if word['word'].strip() in curse_words_set:
-                start_sample, end_sample = split_silence(sample_rate, word)
-                mute_indices.append((start_sample, end_sample)) 
+            if wordA['word'].strip() in curse_words_set:
+                start_sample, end_sample = split_silence(sample_rate, wordA)
+                mute_indices.append((start_sample, end_sample))
+            elif wordB['word'].strip() in curse_words_set:
+                start_sample, end_sample = split_silence(sample_rate, wordB)
+                mute_indices.append((start_sample, end_sample))
 
     # Mute the curse words by setting the amplitude to zero
     for start_sample, end_sample in mute_indices:
