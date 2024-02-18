@@ -14,6 +14,8 @@ from moviepy.editor import *
 from datetime import datetime
 try:
     import torch
+except Exception as e:
+    print("if running nvidia gpu, please install pytorch from website to run more efficiently.")
 
 lemmatizer = WordNetLemmatizer()
 
