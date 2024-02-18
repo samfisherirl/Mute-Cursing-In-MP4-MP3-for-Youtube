@@ -15,7 +15,7 @@
 1) convert mp3
 2) read mp3 transcript with openai wisper via stable-ts
 3) read csv of curse words
-4) if word in sentence then silence word
+4) if curse word found matching a word in a sentence, mute that word
 5) convert back to mp3
 
 ## To add
