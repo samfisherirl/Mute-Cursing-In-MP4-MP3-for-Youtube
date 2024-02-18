@@ -12,7 +12,8 @@ from pathlib import Path
 from nltk.stem import WordNetLemmatizer
 from moviepy.editor import *
 from datetime import datetime
-import torch
+try:
+    import torch
 
 lemmatizer = WordNetLemmatizer()
 
