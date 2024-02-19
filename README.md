@@ -8,6 +8,7 @@
 ## Requires 
 
 - Python 3.10
+- https://pytorch.org/get-started/locally/
 - run one-click-installer.bat
 
 ## Concept 
