@@ -120,30 +120,6 @@ def is_curse_word(word, curse_words_set):
     # Check if the base form is in the curse words set
     return lemma in curse_words_set
 
-# def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_list):
-#     # Create a copy of the audio data to avoid modifying the original
-#     audio_data_muted = np.copy(audio_data)
-#         # Go through each word in the transcription result
-#     # Create a set for faster membership testing
-#     curse_words_set = set(word.lower() for word in curse_words_list)
-
-#     # Generate the start and end sample indices for muting
-#     mute_indices = [
-#         (int(word['start'] * sample_rate), int(word['end'] * sample_rate))
-#         for segment in transcription_result['segments']
-#         for word in segment['words']
-#         if word['word'].strip() in curse_words_set
-#     ]
-
-#     # Create a copy of the audio data to mute
-#     audio_data_muted = np.copy(audio_data)
-
-#     # Mute the curse words by setting the amplitude to zero
-#     for start_sample, end_sample in mute_indices:
-#         audio_data_muted[start_sample:end_sample] = 0
-                
-#     return audio_data_muted
-
 
 def split_silence(sample_rate, word):
     # Calculate the start and end sample indices
