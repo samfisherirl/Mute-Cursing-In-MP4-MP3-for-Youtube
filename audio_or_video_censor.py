@@ -18,8 +18,7 @@ from progress.bar import Bar
 
 
 
-# Define paths and file names
-OUTPUT_AUDIO_PATH = 'output.mp3'
+# Constants
 NEW_AUDIO_PATH = 'clean_audio.mp3'
 OUTPUT_VIDEO_PATH = 'clean_video.mp4'
 CURSE_WORD_FILE = 'curse_words.csv'
