@@ -5,18 +5,32 @@ import numpy as np
 import json
 import soundfile as sf
 import csv
-from tkinter import Tk as Tk
-from tkinter import filedialog
-from tkinter import messagebox
+from tkinter import Tk, messagebox, filedialog
+import tkinter as tk
 import csv
 import random
 from pathlib import Path
 from nltk.stem import WordNetLemmatizer
 from moviepy.editor import *
 import torch
+from datetime import datetime
+from progress.bar import Bar
+
+
+# Define paths and file names
+OUTPUT_AUDIO_PATH = 'output.mp3'
+NEW_AUDIO_PATH = 'clean_audio.mp3'
+OUTPUT_VIDEO_PATH = 'clean_video.mp4'
+CURSE_WORD_FILE = 'curse_words.csv'
+
+day = datetime.now().strftime('%d')
+mo = datetime.now().strftime('%m')
+time = datetime.now().strftime('%H-%M-%S')
 
 lemmatizer = WordNetLemmatizer()
+# Function to update the progress bar
 
+ 
 def load_saved_transcript(json_file_path):
     with open(json_file_path, 'r') as file:
         transcript = json.load(file)
@@ -26,11 +40,11 @@ def load_saved_transcript(json_file_path):
 
 def to_lowercase(input):
     if isinstance(input, dict):
-        return {k.lower(): to_lowercase(v) for k, v in input.items()}
+        return {k.lower().strip(): to_lowercase(v) for k, v in input.items()}
     elif isinstance(input, list):
         return [to_lowercase(element) for element in input]
     elif isinstance(input, str):
-        return input.lower()
+        return input.lower().strip()
     else:
         return input
 
@@ -44,12 +58,11 @@ def process_json(infile):
     with open(infile, 'w') as file:
         json.dump(lowercase_data, file, indent=4)
     # Read the original JSON file
-    with open(infile, 'r') as file:
-        data = json.load(file)
+    return lowercase_data
 
-def read_curse_words_from_csv(csv_file_path):
+def read_curse_words_from_csv(CURSE_WORD_FILE):
   curse_words_list = []
-  with open(csv_file_path, newline='') as csvfile:
+  with open(CURSE_WORD_FILE, newline='') as csvfile:
     reader = csv.reader(csvfile)
     for row in reader:
       curse_words_list.append(row[0])  # Assuming curse words are in column A
@@ -89,9 +102,9 @@ def load_saved_transcript(json_file_path):
     return transcript
 
 
-def read_curse_words_from_csv(csv_file_path):
+def read_curse_words_from_csv(CURSE_WORD_FILE):
   curse_words_list = []
-  with open(csv_file_path, newline='') as csvfile:
+  with open(CURSE_WORD_FILE, newline='') as csvfile:
     reader = csv.reader(csvfile)
     for row in reader:
       curse_words_list.append(row[0])  # Assuming curse words are in column A
@@ -151,6 +164,8 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
     audio_data_muted = np.copy(audio_data)
     # Create a set for faster membership testing
     curse_words_set = set(word.lower() for word in curse_words_list)
+    words_ = 1
+    bar = Bar('Processing', max=len(curse_words_set)/2)
 
     # Initialize an empty list to store the start and end sample indices for muting
     mute_indices = []
@@ -159,77 +174,69 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
         # Go through each word in the segment
         for word in segment['words']:
             # Check if the word is in the curse words set
-            if word['word'].strip() in curse_words_set:
+            if word['word'] in curse_words_set:
                 start_sample, end_sample = split_silence(sample_rate, word)
                 mute_indices.append((start_sample, end_sample)) 
-
+            bar.next()
     # Mute the curse words by setting the amplitude to zero
     for start_sample, end_sample in mute_indices:
         audio_data_muted[start_sample:end_sample] = 0
-
+    bar.finish()
     return audio_data_muted
 
-def censor(transcript_file, audio_file):
-    if not transcript_file:
-        # Load your audio file
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        try:
-            model = stable_whisper.load_model('medium', device=device)
-        except Exception as e:
-            print(str(e))
-            model = stable_whisper.load_model('medium')
-        # Transcribe the audio file
-        result = model.transcribe(audio_file)
-        r = random.randint(0, 100)
-        # Save the transcription result as a JSON file for future use
-        result.save_as_json(f'transcription{r}.json')
-        # Define a list of curse words to mute
-        # Path to your saved JSON transcript file 
-        transcript_file = f'transcription{r}.json'
-        
-    process_json(transcript_file)
-    results = load_saved_transcript(transcript_file)
-    audio_data, sample_rate = librosa.load(audio_file, sr=None)
-    # Mute the curse words in the audio
-    curses = read_curse_words_from_csv(Path.cwd() / "curse_words.csv")
+
+def transcribe_audio(audio_file, device_type):
+    model = stable_whisper.load_hf_whisper('large-v3')
+    # model = stable_whisper.load_model('large-v3', device=device_type)
+    result = model.transcribe(audio_file)
+    transcript_path = f'transcript{random.randint(0, 100)}.json'
+    result.save_as_json(transcript_path)
+    return transcript_path
+
+
+def find_curse_words(audio_data, sample_rate, transcript_file, CURSE_WORD_FILE):
+    results = process_json(transcript_file)
+    curses = read_curse_words_from_csv(CURSE_WORD_FILE)
     curse_words_set = set(curses)
+    return mute_curse_words(audio_data, sample_rate, results, curse_words_set)
 
-    muted_audio = mute_curse_words(
-        audio_data, sample_rate, results, curse_words_set)
-    outfile = Path(audio_file).stem
-    parent = Path(audio_file).parent
-    complete_name = f"{outfile}muted_audio.mp3"
-    complete = parent / complete_name
-    sf.write(complete, muted_audio, sample_rate)
-    return complete_name
 
-if __name__ == '__main__':
-    # Load the model
+def process_audio(audio_file, CURSE_WORD_FILE, transcript_file=None):
+    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+    if not transcript_file:
+        transcript_file = transcribe_audio(audio_file, device_type)
+    audio_data, sample_rate = librosa.load(audio_file, sr=None)
+    muted_audio = find_curse_words(
+        audio_data, sample_rate, transcript_file, CURSE_WORD_FILE)
+    outfile = Path(audio_file).stem + 'muted_audio.mp3'
+    sf.write(outfile, muted_audio, sample_rate)
+    return outfile
+
+
+def process_video(input_video_path, transcript_file):
+    video_clip = VideoFileClip(input_video_path)
+    OUTPUT_AUDIO_PATH = input_video_path.replace('.mp4', '.mp3')
+    video_clip.audio.write_audiofile(OUTPUT_AUDIO_PATH)
+    new_audio_path = process_audio(
+        OUTPUT_AUDIO_PATH, CURSE_WORD_FILE, transcript_file)  # fix audio path
+    with AudioFileClip(new_audio_path) as new_audio_clip:
+        final_video = video_clip.set_audio(new_audio_clip)
+        final_video.write_videofile(
+            OUTPUT_VIDEO_PATH, codec='libx264', audio_codec='aac')
+
+def main():
     root = Tk()
     root.withdraw()  # Hide the main window
+    root.attributes('-topmost', True)
     transcript_file = load_transcript()
     input_video_path = select_audio_or_video()
-    if Path(input_video_path).name.endswith('.mp4'):
-        # Replace 'output.mp3' with the desired output MP3 file path
-        output_audio_path = 'output.mp3'
-        # Replace 'input_video.mp4' with the path to your MP4 file
-        new_audio_path = 'new_audio.mp3'
-        # Replace 'output_video.mp4' with the desired output MP4 file path
-        output_video_path = 'output_video.mp4'
-        # Load the video file
-        video_clip = VideoFileClip(input_video_path)
-        # Load the new audio file
-        new_audio_path = censor(transcript_file, output_audio_path)
-        skip_video = False
+
+    if Path(input_video_path).suffix == '.mp4':
+        process_video(input_video_path, transcript_file)
     else:
-        new_audio_path = censor(
-            transcript_file, input_video_path)
-        skip_video = True
-    if not skip_video:
-        new_audio_clip = AudioFileClip(new_audio_path)
-        final_video = video_clip.set_audio(new_audio_clip)
-        final_video.write_videofile(output_video_path, codec='libx264', audio_codec='aac')
-        # Close the clips
-        new_audio_clip.close()
-        video_clip.close()
-        # Bind the close event to the on_close function
+        # Process audio only
+        process_audio(input_video_path, transcript_file)
+
+
+if __name__ == "__main__":
+    main()
