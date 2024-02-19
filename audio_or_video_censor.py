@@ -22,6 +22,7 @@ from progress.bar import Bar
 NEW_AUDIO_PATH = 'clean_audio.mp3'
 OUTPUT_VIDEO_PATH = 'clean_video.mp4'
 CURSE_WORD_FILE = 'curse_words.csv'
+FASTER_WISPER_MODEL = 'large-v2'
 
 day = datetime.now().strftime('%d')
 mo = datetime.now().strftime('%m')
@@ -162,7 +163,7 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
 
 def transcribe_audio(audio_file, device_type):
     model = stable_whisper.load_faster_whisper(
-        'large-v2', compute_type="float16", device=device_type)
+        FASTER_WISPER_MODEL, compute_type="float16", device=device_type)
     # model = stable_whisper.load_model('large-v3', device=device_type)
     result = model.transcribe_stable(audio_file)
     transcript_path = f'transcript{random.randint(0, 100)}.json'
