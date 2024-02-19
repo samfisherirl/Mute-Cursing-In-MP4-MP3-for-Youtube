@@ -17,6 +17,7 @@ from datetime import datetime
 from progress.bar import Bar
 
 
+
 # Define paths and file names
 OUTPUT_AUDIO_PATH = 'output.mp3'
 NEW_AUDIO_PATH = 'clean_audio.mp3'
@@ -164,20 +165,19 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
     audio_data_muted = np.copy(audio_data)
     # Create a set for faster membership testing
     curse_words_set = set(word.lower() for word in curse_words_list)
-    words_ = 1
-    bar = Bar('Processing', max=len(curse_words_set)/2)
+    bar = Bar('Processing', max=len(transcription_result['segments']))
 
     # Initialize an empty list to store the start and end sample indices for muting
     mute_indices = []
     # Go through each segment in the transcription result
     for segment in transcription_result['segments']:
+        bar.next()
         # Go through each word in the segment
         for word in segment['words']:
             # Check if the word is in the curse words set
             if word['word'] in curse_words_set:
                 start_sample, end_sample = split_silence(sample_rate, word)
                 mute_indices.append((start_sample, end_sample)) 
-            bar.next()
     # Mute the curse words by setting the amplitude to zero
     for start_sample, end_sample in mute_indices:
         audio_data_muted[start_sample:end_sample] = 0
@@ -186,22 +186,23 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
 
 
 def transcribe_audio(audio_file, device_type):
-    model = stable_whisper.load_hf_whisper('large-v3')
+    model = stable_whisper.load_faster_whisper(
+        'large-v2', compute_type="float16", device=device_type)
     # model = stable_whisper.load_model('large-v3', device=device_type)
-    result = model.transcribe(audio_file)
+    result = model.transcribe_stable(audio_file)
     transcript_path = f'transcript{random.randint(0, 100)}.json'
     result.save_as_json(transcript_path)
     return transcript_path
 
 
-def find_curse_words(audio_data, sample_rate, transcript_file, CURSE_WORD_FILE):
+def find_curse_words(audio_data, sample_rate, transcript_file, CURSE_WORD_FILE=CURSE_WORD_FILE):
     results = process_json(transcript_file)
     curses = read_curse_words_from_csv(CURSE_WORD_FILE)
     curse_words_set = set(curses)
     return mute_curse_words(audio_data, sample_rate, results, curse_words_set)
 
 
-def process_audio(audio_file, CURSE_WORD_FILE, transcript_file=None):
+def process_audio(audio_file, transcript_file=None):
     device_type = "cuda" if torch.cuda.is_available() else "cpu"
     if not transcript_file:
         transcript_file = transcribe_audio(audio_file, device_type)
