@@ -4,7 +4,6 @@ import json
 import soundfile as sf
 import csv
 from tkinter import Tk, messagebox, filedialog
-import subprocess
 import csv
 import random
 from audio_extract import extract_audio
@@ -69,7 +68,7 @@ def main_file_audio(wav_file_path):
 
 def to_lowercase(input):
     if isinstance(input, dict):
-        return {k.lower().strip(): to_lowercase(v) for k, v in input.items()}
+        return {k.lower().strip("',.\"-_/`"): to_lowercase(v) for k, v in input.items()}
     elif isinstance(input, list):
         return [to_lowercase(element) for element in input]
     elif isinstance(input, str):
@@ -84,11 +83,15 @@ def process_json(infile):
         data = json.load(file)
     # Convert all strings to lowercase
     lowercase_data = to_lowercase(data)
-    # Write the modified JSON to a new file
+    words = []
+    words = [{'word': word['word'].strip("',.\"-_/`").lower(), 'start': word['start'], 'end': word['end']}
+             for segment in lowercase_data['segments'] for word in segment['words']]
+
+        # Write the modified JSON to a new file
     with open(infile, 'w') as file:
-        json.dump(lowercase_data, file, indent=4)
+        json.dump(words, file, indent=4)
     # Read the original JSON file
-    return lowercase_data
+    return words
 
 
 def read_curse_words_from_csv(CURSE_WORD_FILE):
@@ -206,7 +209,6 @@ def _load_wav_as_np_array(file_path):
 
     # Normalize audio to range [-1, 1]
     np_audio = np_audio.astype(np.float32) / np.iinfo(np_audio.dtype).max
-
     return np_audio, sample_rate
 
 
@@ -279,7 +281,7 @@ def get_word_samples(word, sample_rate):
     return (start_sample, end_sample)
 
 
-def apply_fade(audio_data, start_sample, end_sample, sample_rate, fade_duration=0.1):
+def apply_fade(audio_data, start_sample, end_sample, sample_rate, fade_duration=0.001):
     # Calculate the number of samples for the fade duration
     fade_samples = int(fade_duration * sample_rate)
 
@@ -315,27 +317,25 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
     audio_data_muted = np.copy(audio_data)
     # Create a set for faster membership testing
     curse_words_set = set(word.lower() for word in curse_words_list)
-    bar = Bar('Processing', max=len(transcription_result['segments']))
+    bar = Bar('Processing', max=len(transcription_result))
 
     # Initialize an empty list to store the start and end sample indices for muting
     mute_indices = []
     # Go through each segment in the transcription result
-    for segment in transcription_result['segments']:
+    for word in transcription_result:
         bar.next()
-        # Go through each word in the segment
-        for word in segment['words']:
-            if word['word'] in curse_words_set:
-                # Check if the word is in the curse words set
-                start_sample, end_sample = split_silence(sample_rate, word)
-                # Apply fade-in before muting
-                apply_fade(audio_data_muted, start_sample,
-                           end_sample, sample_rate)
-                # Mute the curse words by setting the amplitude to zero
-                audio_data_muted[start_sample:end_sample] = 0
-                # Apply fade-out after muting
-                apply_fade(audio_data_muted, start_sample,
-                           end_sample, sample_rate)
-
+        if word['word'] in curse_words_set:
+            # Check if the word is in the curse words set
+            start_sample, end_sample = split_silence(sample_rate, word)
+            # Apply fade-in before muting
+            audio_data_muted = apply_fade(audio_data_muted, start_sample,
+                        end_sample, sample_rate)
+            # Mute the curse words by setting the amplitude to zero
+            audio_data_muted[start_sample:end_sample] = 0
+            # Apply fade-out after muting
+            audio_data_muted = apply_fade(audio_data_muted, start_sample,
+                        end_sample, sample_rate)
+    bar.finish()
     return audio_data_muted
 
 
