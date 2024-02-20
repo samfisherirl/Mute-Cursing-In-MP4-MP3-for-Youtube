@@ -1,4 +1,4 @@
-# mute_curse_words_for_youtube
+# Mute curses in stream vods for Youtube or Kick
 
 - Call one-click-installer
 - Or venv + pip install -r requirements.txt
