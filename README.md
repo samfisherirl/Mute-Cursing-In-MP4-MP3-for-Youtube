@@ -13,7 +13,7 @@
 
 ## Concept 
 
-1) convert mp3 to wav
+1) convert mp4/mp3 to wav
 2) read mp3 transcript with openai wisper via stable-ts
 3) read csv of curse words
 4) if curse word found matching a word in a sentence, mute that word
