@@ -1,4 +1,12 @@
-audiofile==1.4.0
-moviepy==1.0.3
-nltk==3.8.1
+audio_extract==0.6.0
 numpy==1.26.4
+progress==1.6
+soundfile==0.12.1
+stable-ts
+progress
+wave
+faster-whisper
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch 
+torchvision 
+torchaudio
