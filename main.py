@@ -23,6 +23,8 @@ from process_files import *
 # Define paths and file names
 CURSE_WORD_FILE = 'curse_words.csv'
 sample_audio_path = 'looperman.wav'
+transcripts = ""
+exports = ""
 
 
 def dmt():
@@ -257,12 +259,14 @@ def transcribe_audio(audio_file, device_type):
      
      @return Path to JSON file that contains the transcript of the audio file. If there is no transcript it will be None
     """
+    global transcripts, exports
     model = stable_whisper.load_faster_whisper(
         'large-v3', device=device_type)
     # model = stable_whisper.load_model('large-v3', device=device_type)
     result = model.transcribe_stable(
         audio_file, word_timestamps=True)
     transcript_path = f'transcript{random.randint(0, 100)}.json'
+    transcript_path = str(Path(Path(__file__).parent / 'transcripts' / transcript_path))
     result.save_as_json(transcript_path)
     return transcript_path
 
@@ -298,7 +302,7 @@ def process_audio(audio_file, transcript_file=None):
         transcript_file = transcribe_audio(audio_file, device_type)
     convert_stereo(audio_file)
     audio_data, sample_rate = sf.read(audio_file, samplerate=None, dtype='float64')
-
+    
     muted_audio = find_curse_words(
         audio_data, sample_rate, transcript_file)
     outfile = Path(audio_file).parent / \
@@ -337,6 +341,7 @@ def main():
     """
      Main function of the program. Shows dialogue for fileselect video/audio and transcript files. Loads and processes the transcript file to determine the type of audio and / or video
     """
+    global transcripts, exports
     root = Tk()
     big_frame = ttk.Frame(root)
     
@@ -345,17 +350,15 @@ def main():
     root.attributes('-topmost', True)
     transcript_file = load_transcript()
     input_video_path = select_audio_or_video()
+    transcripts, exports = make_dirs()
     cwd = Path(input_video_path).parent
-
     if Path(input_video_path).suffix == '.mp4':
         result = process_video(input_video_path, transcript_file)
         song = Path(input_video_path).parent / result
-
     else:
         # Process audio only
         process_audio(input_video_path, transcript_file)
 
 
 if __name__ == "__main__":
-    make_dirs()
     main()
