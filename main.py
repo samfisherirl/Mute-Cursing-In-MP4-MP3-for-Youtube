@@ -25,6 +25,18 @@ CURSE_WORD_FILE = 'curse_words.csv'
 sample_audio_path = 'looperman.wav'
 transcripts = ""
 exports = ""
+new_trans_path = Path.cwd()
+new_trans_path = Path(str(new_trans_path) + "\\transcripts")
+
+
+def make_dirs():
+    """returns (transcript_folder, export_folder)"""
+    global new_trans_path, exports
+    dmt_ = dmt()
+    new_trans_path.mkdir(parents=True, exist_ok=True)
+    new_trans_path = new_trans_path / (f"transcript{dmt_}.json")
+    exports = Path(cwd / "exports").mkdir(parents=True, exist_ok=True)
+    return (new_trans_path, exports)
 
 
 def dmt():
@@ -259,19 +271,17 @@ def transcribe_audio(audio_file, device_type):
      
      @return Path to JSON file that contains the transcript of the audio file. If there is no transcript it will be None
     """
-    global transcripts, exports
+    global transcripts, exports, new_trans_path
     model = stable_whisper.load_faster_whisper(
         'large-v3', device=device_type)
     # model = stable_whisper.load_model('large-v3', device=device_type)
     result = model.transcribe_stable(
-        audio_file, word_timestamps=True)
-    transcript_path = f'transcript{random.randint(0, 100)}.json'
-    transcript_path = str(Path(Path(__file__).parent / 'transcripts' / transcript_path))
-    result.save_as_json(transcript_path)
-    return transcript_path
+        audio_file, word_timestamps=True) 
+    result.save_as_json(str(new_trans_path))
+    return new_trans_path
 
 
-def find_curse_words(audio_content, sample_rate, transcript_file, CURSE_WORD_FILE=CURSE_WORD_FILE):
+def find_curse_words(audio_content, sample_rate, results, CURSE_WORD_FILE=CURSE_WORD_FILE):
     """
      Find Curse words in audio content. This is a wrapper around mute_curse_words that takes into account the sample rate in order to get an accurate set of cursors and returns a set of words that are present in the audio
      
@@ -282,7 +292,6 @@ def find_curse_words(audio_content, sample_rate, transcript_file, CURSE_WORD_FIL
      
      @return The set of words that are present in the audio content and are not present in the transcript. This set is used to make sure that we don't accidentally miss a word
     """
-    results = process_json(transcript_file)
     curses = read_curse_words_from_csv(CURSE_WORD_FILE)
     curse_words_set = set(curses)
     return mute_curse_words(audio_content, sample_rate, results, curse_words_set)
@@ -297,14 +306,17 @@ def process_audio(audio_file, transcript_file=None):
      
      @return path to audio file with processed
     """
-    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+    
     if not transcript_file:
-        transcript_file = transcribe_audio(audio_file, device_type)
+        transcript_file = transcribe_audio(
+            audio_file, device_type="cuda" if torch.cuda.is_available() else "cpu")
+        
     convert_stereo(audio_file)
     audio_data, sample_rate = sf.read(audio_file, samplerate=None, dtype='float64')
     
+    results = process_json(transcript_file)
     muted_audio = find_curse_words(
-        audio_data, sample_rate, transcript_file)
+        audio_data, sample_rate, results)
     outfile = Path(audio_file).parent / \
         str(Path(audio_file).name + '_muted_audio.wav')
     # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -341,10 +353,9 @@ def main():
     """
      Main function of the program. Shows dialogue for fileselect video/audio and transcript files. Loads and processes the transcript file to determine the type of audio and / or video
     """
-    global transcripts, exports
+    global transcripts, exports 
     root = Tk()
-    big_frame = ttk.Frame(root)
-    
+    big_frame = ttk.Frame(root) 
     big_frame.pack(fill="both", expand=True)
     root.withdraw()
     root.attributes('-topmost', True)

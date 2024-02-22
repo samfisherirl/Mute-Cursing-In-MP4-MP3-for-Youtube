@@ -5,11 +5,9 @@ import numpy as np
 import soundfile as sf
 import csv
 
+
 cwd = Path(__file__).parent
 
-def make_dirs():
-    """returns (transcript_folder, export_folder)"""
-    return (Path(cwd / "tscript").mkdir(parents=True, exist_ok=True), Path(cwd / "exports").mkdir(parents=True, exist_ok=True))
     
 
 def load_saved_transcript(json_file_path):
@@ -44,27 +42,30 @@ def load_saved_transcript(json_file_path):
 
 def to_lowercase(input):
     if isinstance(input, dict):
-        return {k.lower().strip("',.\"-_/`"): to_lowercase(v) for k, v in input.items()}
+        return {k.lower().strip("',.\"-_/` ").strip(): to_lowercase(v).strip("',.\"-_/` ").strip() for k, v in input.items()}
     elif isinstance(input, list):
         return [to_lowercase(element) for element in input]
     elif isinstance(input, str):
-        return input.lower().strip()
+        return input.lower().strip("',.\"-_/` ").strip()
     else:
         return input
 
 
 def process_json(infile):
+    global new_trans_file
     # Read the original JSON file
-    with open(infile, 'r') as file:
-        data = json.load(file)
+    with open(infile, 'r') as f:
+        data = json.load(f)
     # Convert all strings to lowercase
     words = []
-    words = [{'word': word['word'].strip("',.\"-_/`").lower(), 'start': word['start'], 'end': word['end']}
-             for segment in data['segments'] for word in segment['words']]
-
-        # Write the modified JSON to a new file
-    with open(infile, 'w') as file:
-        json.dump(words, file, indent=4)
+    try:
+        words = [{'word': word['word'].strip("',.\"-_/`").lower().strip(), 'start': word['start'], 'end': word['end']}
+                for segment in data['segments'] for word in segment['words']]
+            # Write the modified JSON to a new file
+        with open(infile, 'w') as file:
+            json.dump(words, file, indent=4)
+    except Exception as e:
+        words = data
     # Read the original JSON file
     return words
 
