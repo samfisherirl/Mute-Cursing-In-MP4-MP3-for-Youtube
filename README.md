@@ -1,5 +1,11 @@
 # Mute curse words in videos
 
+
+
+https://github.com/samfisherirl/Mute-Cursing-In-MP4-MP3-for-Youtube/assets/98753696/9c34774a-31fc-4b57-9335-dbf30d0b3974
+
+
+
 - Call one-click-installer
 - Or venv + pip install -r requirements.txt
 - FileSelect transcript and or mp3 file
