@@ -2,8 +2,7 @@
 
 
 
-https://github.com/samfisherirl/Mute-Cursing-In-MP4-MP3-for-Youtube/assets/98753696/9c34774a-31fc-4b57-9335-dbf30d0b3974
-
+https://github.com/samfisherirl/Mute-Cursing-In-MP4-MP3-for-Youtube/assets/98753696/74cde7ee-774c-4517-8752-45a081d10e8f
 
 
 - Call one-click-installer
