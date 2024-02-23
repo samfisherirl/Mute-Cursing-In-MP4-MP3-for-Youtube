@@ -198,8 +198,8 @@ def split_silence(sample_rate, word):
     start_sample = int(word['start'] * sample_rate)
     end_sample = int(word['end'] * sample_rate)
     if (end_sample - start_sample) < 3000:
-        start_sample = start_sample - 1000
-        end_sample = end_sample + 1000
+        start_sample = start_sample - 500
+        end_sample = end_sample + 500
     return start_sample, end_sample
 
 
