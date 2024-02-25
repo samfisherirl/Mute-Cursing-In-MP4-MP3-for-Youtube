@@ -18,6 +18,7 @@ import wave
 from os import remove
 from process_files import remove_clicks
 from process_files import *
+from mutagen.mp3 import MP3
 
 
 # Define paths and file names
@@ -262,23 +263,6 @@ def convert_stereo(f):
              format='WAV', subtype='FLOAT')
 
 
-def transcribe_audio(audio_file, device_type):
-    """
-     Transcribe audio to a device. This is a wrapper around whisper. load_faster_whisper and whisper. load_model to get a model and transcribe the audio to the device.
-     
-     @param audio_file - Path to audio file. Must be a file - like object.
-     @param device_type - Device type to transcribe to.
-     
-     @return Path to JSON file that contains the transcript of the audio file. If there is no transcript it will be None
-    """
-    global transcripts, exports, new_trans_path
-    model = stable_whisper.load_faster_whisper(
-        'large-v3', device=device_type)
-    # model = stable_whisper.load_model('large-v3', device=device_type)
-    result = model.transcribe_stable(
-        audio_file, word_timestamps=True) 
-    result.save_as_json(str(new_trans_path))
-    return new_trans_path
 
 
 def find_curse_words(audio_content, sample_rate, results, CURSE_WORD_FILE=CURSE_WORD_FILE):
@@ -297,6 +281,25 @@ def find_curse_words(audio_content, sample_rate, results, CURSE_WORD_FILE=CURSE_
     return mute_curse_words(audio_content, sample_rate, results, curse_words_set)
 
 
+def transcribe_audio(audio_file, device_type):
+    """
+     Transcribe audio to a device. This is a wrapper around whisper. load_faster_whisper and whisper. load_model to get a model and transcribe the audio to the device.
+     
+     @param audio_file - Path to audio file. Must be a file - like object.
+     @param device_type - Device type to transcribe to.
+     
+     @return Path to JSON file that contains the transcript of the audio file. If there is no transcript it will be None
+    """
+    global transcripts, exports, new_trans_path
+    model = stable_whisper.load_faster_whisper(
+        'large-v3', device=device_type)
+    # model = stable_whisper.load_model('large-v3', device=device_type)
+    result = model.transcribe_stable(
+        audio_file, word_timestamps=True)
+    result.save_as_json(str(new_trans_path))
+    return new_trans_path
+
+
 def process_audio(audio_file, transcript_file=None):
     """
      Process audio and transcribe it to wav. This is the main function of the program. It takes the audio file and transcribes it using transcript_file if it is not provided.
@@ -306,22 +309,25 @@ def process_audio(audio_file, transcript_file=None):
      
      @return path to audio file with processed
     """
-    
+    print('transcribing')
     if not transcript_file:
         transcript_file = transcribe_audio(
             audio_file, device_type="cuda" if torch.cuda.is_available() else "cpu")
-        
+    print('converting to stereo')
     convert_stereo(audio_file)
+    print('reading audio')
     audio_data, sample_rate = sf.read(audio_file, samplerate=None, dtype='float64')
-    
+    print('process json')
     results = process_json(transcript_file)
+    print('find curse words')
     muted_audio = find_curse_words(
         audio_data, sample_rate, results)
     outfile = Path(audio_file).parent / \
         str(Path(audio_file).name + '_muted_audio.wav')
     # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    print('curse words removed, now removing clicks')
     remove_clicks(muted_audio, sample_rate, 0.5)
-    # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    print('exporting file now....')
     sf.write(outfile, muted_audio, sample_rate)
     return outfile
 

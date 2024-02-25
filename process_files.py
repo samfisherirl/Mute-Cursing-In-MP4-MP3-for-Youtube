@@ -4,11 +4,42 @@ from datetime import datetime
 import numpy as np
 import soundfile as sf
 import csv
+from pydub import AudioSegment
+import math
 
 
 cwd = Path(__file__).parent
 
-    
+
+def split_mp3(file_path):
+    # Convert MP3 to WAV for processing
+    audio = AudioSegment.from_mp3(file_path)
+    audio.export("temp.wav", format="wav")
+
+    # Load the full audio file
+    data, samplerate = sf.read("temp.wav")
+    duration_in_seconds = len(data) / samplerate
+    segment_duration = 3600  # 1 hour in seconds
+    number_of_segments = math.ceil(duration_in_seconds / segment_duration)
+    segment_paths = []
+
+    for i in range(number_of_segments):
+        start_time = i * segment_duration
+        end_time = min((i + 1) * segment_duration, duration_in_seconds)
+        start_sample = int(start_time * samplerate)
+        end_sample = int(end_time * samplerate)
+        segment_data = data[start_sample:end_sample]
+
+        segment_file_path = f"segment_{i+1}.wav"
+        sf.write(segment_file_path, segment_data, samplerate)
+        segment_paths.append(segment_file_path)
+        print(f"Segment {i+1} written to {segment_file_path}")
+
+    # Remove the temporary WAV file
+    Path("temp.wav").unlink()
+
+    return segment_paths
+
 
 def load_saved_transcript(json_file_path):
     with open(json_file_path, 'r') as file:
