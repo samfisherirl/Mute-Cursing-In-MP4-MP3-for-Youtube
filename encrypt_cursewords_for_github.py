@@ -1,5 +1,3 @@
-# to prevent the repo being taken down for having every bad word, 
-# I have written an encrypt/decript script to ensure it can be adjusted in  the future
 from cryptography.fernet import Fernet
 import csv
 
@@ -45,7 +43,7 @@ def decrypt_csv(filename, key):
             # Convert string representation of list back to a list
             row_list = eval(row)
             if len(row_list) > 0:
-                curse_words.append(row_list)
+                curse_words.append(row_list[0])
                 writer.writerow(row_list)
     return curse_words
 

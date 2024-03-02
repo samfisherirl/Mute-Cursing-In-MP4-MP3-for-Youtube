@@ -1,3 +1,4 @@
+from moviepy.editor import VideoFileClip, AudioFileClip
 from pathlib import Path
 import json
 from datetime import datetime
@@ -85,7 +86,7 @@ def to_lowercase(input):
 def process_json(infile):
     global new_trans_file
     # Read the original JSON file
-    with open(infile, 'r') as f:
+    with open(infile, 'r', errors="replace", encoding='utf-8') as f:
         data = json.load(f)
     # Convert all strings to lowercase
     words = []
@@ -149,5 +150,34 @@ def read_curse_words_from_csv(CURSE_WORD_FILE):
             # Assuming curse words are in column A
             curse_words_list.append(row[0])
     return curse_words_list
+
 # Function to mute curse words in the audio
+
+
+def replace_audio(mp4_path, wav_path):
+    # Create a Path object from the mp4 path
+    original_video_path = Path(mp4_path)
+
+    # Get the directory and the name without extension
+    directory = original_video_path.parent
+    original_name = original_video_path.stem
+
+    # Define the new output path
+    output_path = directory / f"{original_name}_cleaned.mp4"
+
+    # Convert Path objects to strings before passing to moviepy
+    video_clip = VideoFileClip(str(mp4_path))
+    audio_clip = AudioFileClip(str(wav_path))
+
+    # Ensure the audio is the same duration as the video
+    if audio_clip.duration != video_clip.duration:
+        raise ValueError(
+            "The durations of the video and audio files do not match.")
+
+    # Set the audio of the video clip to the new audio
+    video_clip = video_clip.set_audio(audio_clip)
+
+    # Write the result to a file
+    video_clip.write_videofile(
+        str(output_path), codec='libx264', audio_codec='aac')
 

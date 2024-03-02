@@ -55,11 +55,13 @@ def load_transcript():
      @return path to transcript or
     """
     # Ask the user if they want to load an existing transcript
+    init_dir = Path(__file__).parent / "transcripts"
     if messagebox.askyesno('Load Transcript', 'If this program crashed, this saves the transcript to ensure it doesn\'t require restarting.\n\nDo you want to load an existing transcript?'):
         # File dialog to select a transcript JSON file
         transcript_path = filedialog.askopenfilename(
             title='Select Transcript File',
-            filetypes=[('JSON files', '*.json')]
+            filetypes=[('JSON files', '*.json')],
+            initialdir=str(init_dir)
         )
         if transcript_path:
             print(f'Transcript file selected: {transcript_path}')
@@ -374,6 +376,9 @@ def main():
     if Path(input_video_path).suffix == '.mp4':
         result = process_video(input_video_path, transcript_file)
         song = Path(input_video_path).parent / result
+        # Example usage:
+        replace_audio(input_video_path, song)
+
     else:
         # Process audio only
         process_audio(input_video_path, transcript_file)
