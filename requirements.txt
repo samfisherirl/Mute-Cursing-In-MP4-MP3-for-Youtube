@@ -10,3 +10,4 @@ faster-whisper
 torch 
 torchvision 
 torchaudio
+cryptography
