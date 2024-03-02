@@ -14,6 +14,7 @@ https://github.com/samfisherirl/Mute-Cursing-In-MP4-MP3-for-Youtube/assets/98753
 
 - Python 3.10
 - https://pytorch.org/get-started/locally/
+- ffmpeg https://github.com/icedterminal/ffmpeg-installer/releases/download/6.1.1.20240201/FFmpeg_Full.msi
 - run one-click-installer.bat
 
 ## Concept 
