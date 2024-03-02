@@ -19,7 +19,7 @@ from os import remove
 from process_files import remove_clicks
 from process_files import *
 from mutagen.mp3 import MP3
-
+import encrypt_cursewords_for_github as byte_curses
 
 # Define paths and file names
 CURSE_WORD_FILE = 'curse_words.csv'
@@ -218,7 +218,9 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
     # Create a copy of the audio data to avoid modifying the original
     audio_data_muted = np.copy(audio_data)
     # Create a set for faster membership testing
-    curse_words_set = set(word.lower() for word in curse_words_list)
+    curse_words = byte_curses.decrypt_csv(
+        byte_curses.ENCRYPTED_CSV_FILENAME, byte_curses.load_key())
+    curse_words_set = set(word.lower() for word in curse_words)
     bar = Bar('Processing', max=len(transcription_result))
 
     # Initialize an empty list to store the start and end sample indices for muting
@@ -295,7 +297,7 @@ def transcribe_audio(audio_file, device_type):
         'large-v3', device=device_type)
     # model = stable_whisper.load_model('large-v3', device=device_type)
     result = model.transcribe_stable(
-        audio_file, word_timestamps=True)
+        audio_file, word_timestamps=True, language='en')
     result.save_as_json(str(new_trans_path))
     return new_trans_path
 
@@ -309,8 +311,8 @@ def process_audio(audio_file, transcript_file=None):
      
      @return path to audio file with processed
     """
-    print('transcribing')
     if not transcript_file:
+        print('transcribing')
         transcript_file = transcribe_audio(
             audio_file, device_type="cuda" if torch.cuda.is_available() else "cpu")
     print('converting to stereo')
@@ -324,7 +326,6 @@ def process_audio(audio_file, transcript_file=None):
         audio_data, sample_rate, results)
     outfile = Path(audio_file).parent / \
         str(Path(audio_file).name + '_muted_audio.wav')
-    # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     print('curse words removed, now removing clicks')
     remove_clicks(muted_audio, sample_rate, 0.5)
     print('exporting file now....')
@@ -346,7 +347,8 @@ def process_video(input_video_path, transcript_file):
     suf = str(Path(output_audio_path).suffix)
     audio_out = Path(Path(input_video_path).parent / "audio.wav")
     output_video_path = str(output_audio_path).replace(suf, "clean_video.mp4")
-    remove(str(audio_out))
+    if audio_out.exists():
+        remove(str(audio_out))
     extract_audio(input_path=input_video_path,
                   output_path=str(audio_out), output_format="wav")
     remove_clicks
@@ -359,7 +361,7 @@ def main():
     """
      Main function of the program. Shows dialogue for fileselect video/audio and transcript files. Loads and processes the transcript file to determine the type of audio and / or video
     """
-    global transcripts, exports 
+    global transcripts, exports
     root = Tk()
     big_frame = ttk.Frame(root) 
     big_frame.pack(fill="both", expand=True)
