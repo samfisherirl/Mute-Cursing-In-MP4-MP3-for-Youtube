@@ -1,3 +1,5 @@
+# to prevent the repo being taken down for having every bad word, 
+# I have written an encrypt/decript script to ensure it can be adjusted in  the future
 from cryptography.fernet import Fernet
 import csv
 
