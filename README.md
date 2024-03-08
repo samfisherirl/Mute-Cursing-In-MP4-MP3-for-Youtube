@@ -8,7 +8,7 @@
 - Find a permanate place for the app and unzip main.zip, click and run `one-click-installer.bat`
 - First run will require a download that takes a short bit.  
 - Or venv + pip install -r requirements.txt
-- FileSelect transcript and or mp3 file
+- For the first time, skip transcript and click no. Then select an mp3 or mp4 file
 - output to same relative path
 
 # Example 
