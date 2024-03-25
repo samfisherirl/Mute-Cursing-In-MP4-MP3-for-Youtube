@@ -19,9 +19,8 @@ from os import remove
 from process_files import remove_clicks
 from process_files import *
 from mutagen.mp3 import MP3
-import encrypt_cursewords_for_github as byte_curses
-from split_segs import *
-import os
+import time
+
 # Define paths and file names
 CURSE_WORD_FILE = 'curse_words.csv'
 sample_audio_path = 'looperman.wav'
@@ -48,6 +47,64 @@ def dmt():
     return f'{day}-{mo}-{time}'
 
 
+class AudioProcessor:
+    def __init__(self, audio_file, transcript_file=None):
+        self.audio_file = audio_file
+        self.transcript_file = transcript_file
+        self.file_array = split_mp3(audio_file)
+        self.total_segments = len(self.file_array)
+        self.estimated_total_time = 0
+        self.time_taken_first_iteration = 0
+
+    def process_segment(self, segment):
+        print(f"Transcribing segment {segment}...")
+        convert_stereo(segment)
+        transcript = transcribe_audio(
+            segment, device_type="cuda" if torch.cuda.is_available() else "cpu")
+        return transcript
+
+    def estimate_time(self, current_iteration):
+        remaining_time = self.estimated_total_time - \
+            (self.time_taken_first_iteration * (current_iteration + 1))
+        print(f"Estimated remaining time: {remaining_time:.2f} seconds")
+
+    def process_audio(self):
+        transcripts = {}
+        print("breaking up vod into hour long segments...")
+        for i, segment in enumerate(self.file_array):
+            if i == 0:
+                start_time = time.time()
+
+            transcript_file = self.process_segment(segment)
+            transcripts.update({segment: transcript_file})
+            
+            if i == 0:
+                self.time_taken_first_iteration = time.time() - start_time
+                self.estimated_total_time = self.time_taken_first_iteration * self.total_segments
+
+            self.estimate_time(i)
+
+            transcripts = {}
+            file_array = split_mp3(self.audio_file)
+            if not transcript_file:
+                for i, segment in enumerate(file_array):
+                    print(f"Transcribing segment {segment}...")
+                    convert_stereo(segment)
+                    transcript_file = transcribe_audio(
+                        segment, device_type="cuda" if torch.cuda.is_available() else "cpu")
+                    transcripts.update(segment, transcript_file)
+            for audio, transcript in transcripts:
+                # file_array = split_mp3(segment)
+                audio_data, sample_rate = sf.read(
+                    audio, samplerate=None, dtype='float64')
+                results = process_json(transcript)
+                muted_audio = find_curse_words(audio_data, sample_rate, results)
+                outfile = Path(audio).parent / \
+                    str(Path(audio).name + '_muted_audio.wav')
+                remove_clicks(muted_audio, sample_rate, 0.5)
+                sf.write(outfile, muted_audio, sample_rate)
+        return outfile
+
 def load_transcript():
     """
      Load Transcript if program crashed this saves the transcript to ensure it doesn't require restarting
@@ -56,13 +113,11 @@ def load_transcript():
      @return path to transcript or
     """
     # Ask the user if they want to load an existing transcript
-    init_dir = Path(__file__).parent / "transcripts"
     if messagebox.askyesno('Load Transcript', 'If this program crashed, this saves the transcript to ensure it doesn\'t require restarting.\n\nDo you want to load an existing transcript?'):
         # File dialog to select a transcript JSON file
         transcript_path = filedialog.askopenfilename(
             title='Select Transcript File',
-            filetypes=[('JSON files', '*.json')],
-            initialdir=str(init_dir)
+            filetypes=[('JSON files', '*.json')]
         )
         if transcript_path:
             print(f'Transcript file selected: {transcript_path}')
@@ -202,8 +257,8 @@ def split_silence(sample_rate, word):
     start_sample = int(word['start'] * sample_rate)
     end_sample = int(word['end'] * sample_rate)
     if (end_sample - start_sample) < 3000:
-        start_sample = start_sample - 500
-        end_sample = end_sample + 500
+        start_sample = start_sample - 1000
+        end_sample = end_sample + 1000
     return start_sample, end_sample
 
 
@@ -221,9 +276,7 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
     # Create a copy of the audio data to avoid modifying the original
     audio_data_muted = np.copy(audio_data)
     # Create a set for faster membership testing
-    curse_words = byte_curses.decrypt_csv(
-        byte_curses.ENCRYPTED_CSV_FILENAME, byte_curses.load_key())
-    curse_words_set = set(word.lower() for word in curse_words)
+    curse_words_set = set(word.lower() for word in curse_words_list)
     bar = Bar('Processing', max=len(transcription_result))
 
     # Initialize an empty list to store the start and end sample indices for muting
@@ -269,7 +322,6 @@ def convert_stereo(f):
 
 
 
-
 def find_curse_words(audio_content, sample_rate, results, CURSE_WORD_FILE=CURSE_WORD_FILE):
     """
      Find Curse words in audio content. This is a wrapper around mute_curse_words that takes into account the sample rate in order to get an accurate set of cursors and returns a set of words that are present in the audio
@@ -300,9 +352,14 @@ def transcribe_audio(audio_file, device_type):
         'large-v3', device=device_type)
     # model = stable_whisper.load_model('large-v3', device=device_type)
     result = model.transcribe_stable(
-        audio_file, word_timestamps=True, language='en')
+        audio_file, word_timestamps=True)
     result.save_as_json(str(new_trans_path))
     return new_trans_path
+
+
+
+
+
 
 
 def process_audio(audio_file, transcript_file=None):
@@ -314,26 +371,9 @@ def process_audio(audio_file, transcript_file=None):
      
      @return path to audio file with processed
     """
-    if not transcript_file:
-        print('transcribing')
-        transcript_file = transcribe_audio(
-            audio_file, device_type="cuda" if torch.cuda.is_available() else "cpu")
-    print('converting to stereo')
-    convert_stereo(audio_file)
-    print('reading audio')
-    audio_data, sample_rate = sf.read(audio_file, samplerate=None, dtype='float64')
-    print('process json')
-    results = process_json(transcript_file)
-    print('find curse words')
-    muted_audio = find_curse_words(
-        audio_data, sample_rate, results)
-    outfile = Path(audio_file).parent / \
-        str(Path(audio_file).name + '_muted_audio.wav')
-    print('curse words removed, now removing clicks')
-    remove_clicks(muted_audio, sample_rate, 0.5)
-    print('exporting file now....')
-    sf.write(outfile, muted_audio, sample_rate)
-    return outfile
+    # Usage
+    audio_processor = AudioProcessor(audio_file, transcript_file)
+    print(audio_processor.process_audio())
 
 
 def process_video(input_video_path, transcript_file):
@@ -350,10 +390,10 @@ def process_video(input_video_path, transcript_file):
     suf = str(Path(output_audio_path).suffix)
     audio_out = Path(Path(input_video_path).parent / "audio.wav")
     output_video_path = str(output_audio_path).replace(suf, "clean_video.mp4")
-    if audio_out.exists():
-        remove(str(audio_out))
+    remove(str(audio_out))
     extract_audio(input_path=input_video_path,
                   output_path=str(audio_out), output_format="wav")
+    remove_clicks
     # Process audio (assuming process_audio returns a path to the processed audio file)
     return process_audio(
         str(audio_out), transcript_file)
@@ -363,7 +403,7 @@ def main():
     """
      Main function of the program. Shows dialogue for fileselect video/audio and transcript files. Loads and processes the transcript file to determine the type of audio and / or video
     """
-    global transcripts, exports
+    global transcripts, exports 
     root = Tk()
     big_frame = ttk.Frame(root) 
     big_frame.pack(fill="both", expand=True)
@@ -374,17 +414,11 @@ def main():
     transcripts, exports = make_dirs()
     cwd = Path(input_video_path).parent
     if Path(input_video_path).suffix == '.mp4':
-        # process video involves extracting audio and reencoding
         result = process_video(input_video_path, transcript_file)
         song = Path(input_video_path).parent / result
-        replace_audio(input_video_path, song)
     else:
-        if input_video_path.endswith('.mp3') or input_video_path.endswith('.wav'):
-            output_dir = os.path.dirname(os.path.abspath(input_video_path))
-            segments = split_audio(input_video_path, output_dir)
-            for seg in segments:
-                process_audio(seg, transcript_file)
-            # Process audio only
+        # Process audio only
+        process_audio(input_video_path, transcript_file)
 
 
 if __name__ == "__main__":
