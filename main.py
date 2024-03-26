@@ -22,6 +22,7 @@ from mutagen.mp3 import MP3
 import encrypt_cursewords_for_github as byte_curses
 from split_segs import *
 import os
+
 # Define paths and file names
 CURSE_WORD_FILE = 'curse_words.csv'
 sample_audio_path = 'looperman.wav'
@@ -30,7 +31,8 @@ exports = ""
 new_trans_path = Path.cwd()
 new_trans_path = Path(str(new_trans_path) + "\\transcripts")
  
-ADJUST_SILENCE = 0.4 # 0.4 IS 0.2 ADDITIONAL SECONDS BEFORE AND AFTER CURSE ON TOP OF EXISTING SILENCE. 
+ADJUST_SILENCE = 0.4 
+# 0.4 IS 0.2 ADDITIONAL SECONDS BEFORE AND AFTER CURSE ON TOP OF EXISTING SILENCE. 
  
 def make_dirs():
     """returns (transcript_folder, export_folder)"""
