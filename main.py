@@ -299,7 +299,7 @@ def transcribe_audio(audio_file, device_type):
     """
     global transcripts, exports, new_trans_path
     model = stable_whisper.load_faster_whisper(
-        'large-v3', device=device_type)
+        'large-v2', device=device_type)
     # model = stable_whisper.load_model('large-v3', device=device_type)
     result = model.transcribe_stable(
         audio_file, word_timestamps=True, language='en')
