@@ -22,6 +22,7 @@ from mutagen.mp3 import MP3
 import encrypt_cursewords_for_github as byte_curses
 from split_segs import *
 import os
+import threading    
 
 # Define paths and file names
 CURSE_WORD_FILE = 'curse_words.csv'
@@ -31,14 +32,12 @@ exports = ""
 new_trans_path = Path.cwd()
 new_trans_path = Path(str(new_trans_path) + "\\transcripts")
 
-ADJUST_SILENCE = 1.25 # 0.4 IS 0.2 ADDITIONAL SECONDS BEFORE AND AFTER CURSE ON TOP OF EXISTING SILENCE. 
+ADJUST_SILENCE = 1.2 # 0.4 IS 0.2 ADDITIONAL SECONDS BEFORE AND AFTER CURSE ON TOP OF EXISTING SILENCE. 
 
 def make_dirs():
     """returns (transcript_folder, export_folder)"""
     global new_trans_path, exports
-    dmt_ = dmt()
     new_trans_path.mkdir(parents=True, exist_ok=True)
-    new_trans_path = new_trans_path / (f"transcript{dmt_}.json")
     exports = Path(cwd / "exports").mkdir(parents=True, exist_ok=True)
     return (new_trans_path, exports)
 
@@ -204,6 +203,7 @@ def split_silence(sample_rate, word):
     distance = word['end'] - word['start']
     start_distance = (distance * ADJUST_SILENCE)
     word['start'] = word['end'] - start_distance - 0.1
+    distance = word['end'] - word['start']
     word['end'] = word['start'] + (start_distance * ADJUST_SILENCE) + 0.1
     
     start_sample = int(word['start'] * sample_rate)
@@ -304,10 +304,25 @@ def transcribe_audio(audio_file, device_type):
     # model = stable_whisper.load_model('large-v3', device=device_type)
     result = model.transcribe_stable(
         audio_file, word_timestamps=True, language='en')
-    result.save_as_json(str(new_trans_path))
-    return new_trans_path
+    dmt_ = dmt()
+    new_trans_file = new_trans_path / (f"transcript{dmt_}.json")
+    result.save_as_json(str(new_trans_file))
+    return new_trans_file
 
 
+def manage_trans(audio_file, transcript_file=None):
+    """
+     Manage Transcripts. This function is used to manage the transcripts. It will save the transcript to a file and return the path to the file.
+     
+     @return Path to the transcript file
+    """
+
+    if not transcript_file:
+        print('transcribing')
+        transcript_file = transcribe_audio(
+            audio_file, device_type="cuda" if torch.cuda.is_available() else "cpu")
+    return audio_file, transcript_file
+    
 def process_audio(audio_file, transcript_file=None):
     """
      Process audio and transcribe it to wav. This is the main function of the program. It takes the audio file and transcribes it using transcript_file if it is not provided.
@@ -317,10 +332,7 @@ def process_audio(audio_file, transcript_file=None):
      
      @return path to audio file with processed
     """
-    if not transcript_file:
-        print('transcribing')
-        transcript_file = transcribe_audio(
-            audio_file, device_type="cuda" if torch.cuda.is_available() else "cpu")
+
     print('converting to stereo')
     convert_stereo(audio_file)
     print('reading audio')
@@ -385,8 +397,21 @@ def main():
         if in_av_path.endswith('.mp3') or in_av_path.endswith('.wav'):
             output_dir = os.path.dirname(os.path.abspath(in_av_path))
             segments = split_audio(in_av_path, output_dir)
+            trans_audio = {}
             for seg in segments:
-                process_audio(seg, transcript_file)
+                audio, trans  = manage_trans(seg, transcript_file)
+                trans_audio[trans] = audio
+            threads = []
+            for trans, audio in trans_audio.items():
+                # Create a new thread for each split audio file
+                thread = threading.Thread(
+                    target=process_audio, args=(audio, trans))
+                threads.append(thread)
+                thread.start()
+            
+            # Wait for all threads to complete
+            for thread in threads:
+                thread.join()
             # Process audio only
 
 
