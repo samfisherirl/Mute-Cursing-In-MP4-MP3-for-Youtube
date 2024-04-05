@@ -7,7 +7,7 @@ import soundfile as sf
 import csv
 from pydub import AudioSegment
 import math
-
+import scipy
 
 cwd = Path(__file__).parent
 
@@ -121,7 +121,7 @@ def remove_clicks(audio_data, sample_rate, threshold=0.1, window_size=200):
     cleaned_audio : numpy.array
         The audio data with clicks removed.
     """
-
+    
     max_amplitude = np.max(np.abs(audio_data))
     click_threshold = max_amplitude * threshold
     cleaned_audio = np.copy(audio_data)
@@ -141,6 +141,17 @@ def remove_clicks(audio_data, sample_rate, threshold=0.1, window_size=200):
 
     return cleaned_audio
 
+
+def remove_clicks(audio_data, sample_rate):
+
+    # Apply a median filter to remove clicks
+    audio_data_smoothed = scipy.signal.medfilt(audio_data, 5)
+    
+    # Blend the smoothed audio back into the original audio to avoid artifacts
+    alpha = 0.5
+    audio_data_processed = (1 - alpha) * audio_data + alpha * audio_data_smoothed
+    
+    return audio_data_processed
 
 def read_curse_words_from_csv(CURSE_WORD_FILE):
     curse_words_list = []

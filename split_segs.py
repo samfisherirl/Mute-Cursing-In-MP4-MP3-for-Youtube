@@ -1,7 +1,7 @@
 import os
 from pydub import AudioSegment
 from datetime import timedelta
-
+from pathlib import Path
 
 def split_audio(audio_file, output_dir, segment_duration=30):
     """
@@ -27,13 +27,14 @@ def split_audio(audio_file, output_dir, segment_duration=30):
 
     # Split the audio into segments
     segments = []
+    fil_name = Path(audio_file).stem
     segment_start = 0
     segment_number = 1
     while segment_start < total_duration:
         segment_end = min(segment_start + segment_duration, total_duration)
         segment = audio[segment_start * 60000:(segment_end * 60000)]
         segment_filename = os.path.join(
-            output_dir, f"part_{segment_number}.{audio_file.split('.')[-1]}")
+            output_dir, f"{fil_name}_{segment_number}.{audio_file.split('.')[-1]}")
         segment.export(segment_filename, format=audio_file.split(".")[-1])
         segments.append(segment_filename)
         segment_start = segment_end

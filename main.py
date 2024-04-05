@@ -22,8 +22,8 @@ from mutagen.mp3 import MP3
 import encrypt_cursewords_for_github as byte_curses
 from split_segs import *
 import os
-import threading    
-
+import threading
+import scipy
 # Define paths and file names
 CURSE_WORD_FILE = 'curse_words.csv'
 sample_audio_path = 'looperman.wav'
@@ -32,7 +32,6 @@ exports = ""
 new_trans_path = Path.cwd()
 new_trans_path = Path(str(new_trans_path) + "\\transcripts")
 
-ADJUST_SILENCE = 1.2 # 0.4 IS 0.2 ADDITIONAL SECONDS BEFORE AND AFTER CURSE ON TOP OF EXISTING SILENCE. 
 
 def make_dirs():
     """returns (transcript_folder, export_folder)"""
@@ -89,7 +88,6 @@ def select_audio_or_video():
     return None
 
 
-
 def read_curse_words_from_csv(CURSE_WORD_FILE):
     """
      Read curse words from CSV file. This is a list of words that are part of CURIE's word list
@@ -126,7 +124,8 @@ def load_wav_as_np_array(wav_file_path):
             frames = wav_file.readframes(wav_file.getnframes())
 
             # Convert audio frames to float32 NumPy array
-            audio_data = np.frombuffer(frames, dtype=np.int16).astype(np.float32)
+            audio_data = np.frombuffer(
+                frames, dtype=np.int16).astype(np.float32)
 
             # Normalize the audio data
             audio_data /= np.iinfo(np.int16).max
@@ -158,7 +157,7 @@ def get_word_samples(word, sample_rate):
     return (start_sample, end_sample)
 
 
-def apply_fade(audio_data, start_sample, end_sample, sample_rate, fade_duration=0.003):
+def apply_fade(audio_data, start_sample, end_sample, sample_rate, fade_duration=0.02):
     """
      Apply an exponential fade to the audio data. Fade is applied in the range [ start_sample end_sample ] and out the range [ start_sample end_sample + 1 ]
      
@@ -190,25 +189,40 @@ def apply_fade(audio_data, start_sample, end_sample, sample_rate, fade_duration=
     return audio_data
 
 
-def split_silence(sample_rate, word):
+def split_silence(sample_rate, word, audio_data, min_silence_duration=0.2, buffer_ratio=0.25):
     """
-     Split silence into start and end indices. This is used to determine the sample indices that will be used for silencing a sound.
-     
-     @param sample_rate - Sampling rate of the sound in Hz.
-     @param word - Word that is being split. Must contain'start'and'end'keys.
-     
-     @return Tuple of start and end indices. The first index is the start index the second is the end index
+    Split silence into start and end indices with a buffer. Adjust the buffer duration as needed.
+
+    @param sample_rate - Sampling rate of the sound in Hz.
+    @param word - Word being split. Must contain 'start' and 'end' keys.
+    @param audio_data - The audio data array.
+    @param min_silence_duration - Minimum duration of silence to be considered for buffering (default is 0.2 seconds).
+    @param buffer_ratio - Ratio of the silence duration to be added as buffer before and after the silence (default is 0.25).
+
+    @return Tuple of start and end indices including the buffer.
     """
-    # Calculate the start and end sample indices
-    distance = word['end'] - word['start']
-    start_distance = (distance * ADJUST_SILENCE)
-    word['start'] = word['end'] - start_distance - 0.1
-    distance = word['end'] - word['start']
-    word['end'] = word['start'] + (start_distance * ADJUST_SILENCE) + 0.1
-    
-    start_sample = int(word['start'] * sample_rate)
-    end_sample = int(word['end'] * sample_rate)
+    start_time = word['start']
+    end_time = word['end']
+    silence_duration = end_time - start_time
+
+    if silence_duration < min_silence_duration:
+        # Calculate the buffer duration
+        buffer_duration = silence_duration * buffer_ratio
+
+        # Adjust the start and end times with the buffer
+        start_time -= buffer_duration
+        end_time += buffer_duration
+
+    # Ensure the start and end times are within the valid range
+    start_time = max(0, start_time)
+    end_time = min(len(audio_data) / sample_rate, end_time)
+
+    # Convert the adjusted start and end times to sample indices
+    start_sample = int(start_time * sample_rate)
+    end_sample = int(end_time * sample_rate)
+
     return start_sample, end_sample
+
 
 
 def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_list):
@@ -236,15 +250,16 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
         bar.next()
         if word['word'] in curse_words_set:
             # Check if the word is in the curse words set
-            start_sample, end_sample = split_silence(sample_rate, word)
+            start_sample, end_sample = split_silence(
+                sample_rate, word, audio_data)
             # Apply fade-in before muting
             audio_data_muted = apply_fade(audio_data_muted, start_sample,
-                        end_sample, sample_rate)
+                                          end_sample, sample_rate)
             # Mute the curse words by setting the amplitude to zero
             audio_data_muted[start_sample:end_sample] = 0
             # Apply fade-out after muting
             audio_data_muted = apply_fade(audio_data_muted, start_sample,
-                        end_sample, sample_rate)
+                                          end_sample, sample_rate)
     bar.finish()
     return audio_data_muted
 
@@ -269,8 +284,6 @@ def convert_stereo(f):
     # Write the mono data to a new audio file
     sf.write(f, mono_data, sample_rate,
              format='WAV', subtype='FLOAT')
-
-
 
 
 def find_curse_words(audio_content, sample_rate, results, CURSE_WORD_FILE=CURSE_WORD_FILE):
@@ -322,7 +335,8 @@ def manage_trans(audio_file, transcript_file=None):
         transcript_file = transcribe_audio(
             audio_file, device_type="cuda" if torch.cuda.is_available() else "cpu")
     return audio_file, transcript_file
-    
+
+
 def process_audio(audio_file, transcript_file=None):
     """
      Process audio and transcribe it to wav. This is the main function of the program. It takes the audio file and transcribes it using transcript_file if it is not provided.
@@ -336,7 +350,8 @@ def process_audio(audio_file, transcript_file=None):
     print('converting to stereo')
     convert_stereo(audio_file)
     print('reading audio')
-    audio_data, sample_rate = sf.read(audio_file, samplerate=None, dtype='float64')
+    audio_data, sample_rate = sf.read(
+        audio_file, samplerate=None, dtype='float64')
     print('process json')
     results = process_json(transcript_file)
     print('find curse words')
@@ -345,7 +360,7 @@ def process_audio(audio_file, transcript_file=None):
     outfile = Path(audio_file).parent / \
         str(Path(audio_file).name + '_muted_audio.wav')
     print('curse words removed, now removing clicks')
-    remove_clicks(muted_audio, sample_rate, 0.5)
+    remove_clicks(muted_audio, sample_rate)
     print('exporting file now....')
     sf.write(outfile, muted_audio, sample_rate)
     return outfile
@@ -380,7 +395,7 @@ def main():
     """
     global transcripts, exports
     root = Tk()
-    big_frame = ttk.Frame(root) 
+    big_frame = ttk.Frame(root)
     big_frame.pack(fill="both", expand=True)
     root.withdraw()
     root.attributes('-topmost', True)
@@ -399,7 +414,7 @@ def main():
             segments = split_audio(in_av_path, output_dir)
             trans_audio = {}
             for seg in segments:
-                audio, trans  = manage_trans(seg, transcript_file)
+                audio, trans = manage_trans(seg, transcript_file)
                 trans_audio[trans] = audio
             threads = []
             for trans, audio in trans_audio.items():
@@ -408,7 +423,7 @@ def main():
                     target=process_audio, args=(audio, trans))
                 threads.append(thread)
                 thread.start()
-            
+
             # Wait for all threads to complete
             for thread in threads:
                 thread.join()
