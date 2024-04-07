@@ -24,6 +24,8 @@ from split_segs import *
 import os
 import threading
 import scipy
+
+
 # Define paths and file names
 CURSE_WORD_FILE = 'curse_words.csv'
 sample_audio_path = 'looperman.wav'
@@ -32,6 +34,8 @@ exports = ""
 new_trans_path = Path.cwd()
 new_trans_path = Path(str(new_trans_path) + "\\transcripts")
 
+MODEL = stable_whisper.load_faster_whisper(
+    'large-v2', device="cuda" if torch.cuda.is_available() else "cpu")
 
 def make_dirs():
     """returns (transcript_folder, export_folder)"""
@@ -157,20 +161,21 @@ def get_word_samples(word, sample_rate):
     return (start_sample, end_sample)
 
 
-def apply_fade(audio_data, start_sample, end_sample, sample_rate, fade_duration=0.02):
+def apply_fade(audio_data, start_sample, end_sample, fade_ratio=0.1):
     """
      Apply an exponential fade to the audio data. Fade is applied in the range [ start_sample end_sample ] and out the range [ start_sample end_sample + 1 ]
      
      @param audio_data - The audio data to be faded
      @param start_sample - The sample at which the fade starts
      @param end_sample - The sample at which the fade ends
-     @param sample_rate - The sample rate of the audio data
-     @param fade_duration - The duration of the fade in seconds
+     @param fade_ratio - The ratio of the muted section length to be used for fading (default is 0.1, i.e., 10%)
      
-     @return The audio data with the fade applied to the start and end samples as well as the sample rate of
+     @return The audio data with the fade applied to the start and end samples
     """
     # Calculate the number of samples for the fade duration
-    fade_samples = int(fade_duration * sample_rate)
+    fade_samples = int((end_sample - start_sample) * fade_ratio)
+    fade_samples = min(fade_samples, len(
+        audio_data) - start_sample, end_sample)
 
     # Apply an exponential fade-in
     for i in range(fade_samples):
@@ -189,15 +194,15 @@ def apply_fade(audio_data, start_sample, end_sample, sample_rate, fade_duration=
     return audio_data
 
 
-def split_silence(sample_rate, word, audio_data, min_silence_duration=0.2, buffer_ratio=0.25):
+def split_silence(sample_rate, word, audio_data, min_silence_duration=0.1, buffer_ratio=0.1):
     """
     Split silence into start and end indices with a buffer. Adjust the buffer duration as needed.
 
     @param sample_rate - Sampling rate of the sound in Hz.
     @param word - Word being split. Must contain 'start' and 'end' keys.
     @param audio_data - The audio data array.
-    @param min_silence_duration - Minimum duration of silence to be considered for buffering (default is 0.2 seconds).
-    @param buffer_ratio - Ratio of the silence duration to be added as buffer before and after the silence (default is 0.25).
+    @param min_silence_duration - Minimum duration of silence to be considered for buffering (default is 0.1 seconds).
+    @param buffer_ratio - Ratio of the silence duration to be added as buffer before and after the silence (default is 0.1, i.e., 10%).
 
     @return Tuple of start and end indices including the buffer.
     """
@@ -302,7 +307,7 @@ def find_curse_words(audio_content, sample_rate, results, CURSE_WORD_FILE=CURSE_
     return mute_curse_words(audio_content, sample_rate, results, curse_words_set)
 
 
-def transcribe_audio(audio_file, device_type):
+def transcribe_audio(audio_file):
     """
      Transcribe audio to a device. This is a wrapper around whisper. load_faster_whisper and whisper. load_model to get a model and transcribe the audio to the device.
      
@@ -312,16 +317,65 @@ def transcribe_audio(audio_file, device_type):
      @return Path to JSON file that contains the transcript of the audio file. If there is no transcript it will be None
     """
     global transcripts, exports, new_trans_path
-    model = stable_whisper.load_faster_whisper(
-        'large-v2', device=device_type)
     # model = stable_whisper.load_model('large-v3', device=device_type)
-    result = model.transcribe_stable(
+    result = MODEL.transcribe_stable(
         audio_file, word_timestamps=True, language='en')
     dmt_ = dmt()
     new_trans_file = new_trans_path / (f"transcript{dmt_}.json")
     result.save_as_json(str(new_trans_file))
     return new_trans_file
 
+
+def process_segments(segments, transcript_file):
+    """
+     Process audio segments concurrently and return a list of processed segments.
+     
+     @param segments - List of audio segment file paths
+     @param transcript_file - Path to the transcript file
+     
+     @return List of processed audio segment file paths
+    """
+    trans_audio = {}
+    for seg in segments:
+        audio, trans = manage_trans(seg, transcript_file)
+        trans_audio[trans] = audio
+
+    processed_segments = []
+    threads = []
+    for trans, audio in trans_audio.items():
+        # Create a new thread for each segment
+        thread = threading.Thread(target=process_audio, args=(audio, trans))
+        threads.append(thread)
+        thread.start()
+
+    # Wait for all threads to complete
+    for thread in threads:
+        thread.join()
+        processed_segments.append(thread.processed_segment)
+
+    return processed_segments
+
+
+def combine_segments(segments, output_file):
+    """
+     Combine processed audio segments into a single audio file.
+     
+     @param segments - List of processed audio segment file paths
+     @param output_file - Path to the output combined audio file
+    """
+    combined_audio = None
+    sample_rate = None
+
+    for segment in segments:
+        audio_data, segment_sample_rate = sf.read(segment, dtype='float64')
+
+        if combined_audio is None:
+            combined_audio = audio_data
+            sample_rate = segment_sample_rate
+        else:
+            combined_audio = np.concatenate((combined_audio, audio_data))
+
+    sf.write(output_file, combined_audio, sample_rate)
 
 def manage_trans(audio_file, transcript_file=None):
     """
@@ -333,7 +387,7 @@ def manage_trans(audio_file, transcript_file=None):
     if not transcript_file:
         print('transcribing')
         transcript_file = transcribe_audio(
-            audio_file, device_type="cuda" if torch.cuda.is_available() else "cpu")
+            audio_file)
     return audio_file, transcript_file
 
 
@@ -346,7 +400,6 @@ def process_audio(audio_file, transcript_file=None):
      
      @return path to audio file with processed
     """
-
     print('converting to stereo')
     convert_stereo(audio_file)
     print('reading audio')
@@ -355,14 +408,17 @@ def process_audio(audio_file, transcript_file=None):
     print('process json')
     results = process_json(transcript_file)
     print('find curse words')
-    muted_audio = find_curse_words(
-        audio_data, sample_rate, results)
+    muted_audio = find_curse_words(audio_data, sample_rate, results)
     outfile = Path(audio_file).parent / \
         str(Path(audio_file).name + '_muted_audio.wav')
     print('curse words removed, now removing clicks')
     remove_clicks(muted_audio, sample_rate)
     print('exporting file now....')
     sf.write(outfile, muted_audio, sample_rate)
+
+    # Store the processed segment file path in the thread object
+    threading.current_thread().processed_segment = outfile
+
     return outfile
 
 
@@ -412,22 +468,14 @@ def main():
         if in_av_path.endswith('.mp3') or in_av_path.endswith('.wav'):
             output_dir = os.path.dirname(os.path.abspath(in_av_path))
             segments = split_audio(in_av_path, output_dir)
-            trans_audio = {}
-            for seg in segments:
-                audio, trans = manage_trans(seg, transcript_file)
-                trans_audio[trans] = audio
-            threads = []
-            for trans, audio in trans_audio.items():
-                # Create a new thread for each split audio file
-                thread = threading.Thread(
-                    target=process_audio, args=(audio, trans))
-                threads.append(thread)
-                thread.start()
+            processed_segments = process_segments(segments, transcript_file)
 
-            # Wait for all threads to complete
-            for thread in threads:
-                thread.join()
-            # Process audio only
+            # Combine processed segments into a single audio file
+            output_file = os.path.join(output_dir, "combined_audio.wav")
+            combine_segments(processed_segments, output_file)
+
+            print(f"Processed audio saved as: {output_file}")
+
 
 
 if __name__ == "__main__":

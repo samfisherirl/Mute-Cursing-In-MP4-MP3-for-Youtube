@@ -3,7 +3,7 @@ from pydub import AudioSegment
 from datetime import timedelta
 from pathlib import Path
 
-def split_audio(audio_file, output_dir, segment_duration=30):
+def split_audio(audio_file, output_dir, segment_duration=15):
     """
     Split an audio file into segments of specified duration and save them in the output directory.
 
