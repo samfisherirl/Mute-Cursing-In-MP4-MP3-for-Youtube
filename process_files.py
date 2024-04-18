@@ -8,6 +8,7 @@ import csv
 from pydub import AudioSegment
 import math
 import scipy
+import noisereduce as nr
 
 cwd = Path(__file__).parent
 
@@ -84,24 +85,59 @@ def to_lowercase(input):
 
 
 def process_json(infile):
-    global new_trans_file
-    # Read the original JSON file
+    words = []
+
     with open(infile, 'r', errors="replace", encoding='utf-8') as f:
         data = json.load(f)
-    # Convert all strings to lowercase
-    words = []
     try:
-        words = [{'word': word['word'].strip("',.\"-_/`").lower().strip(), 'start': word['start'], 'end': word['end']}
-                for segment in data['segments'] for word in segment['words']]
-            # Write the modified JSON to a new file
-        with open(infile, 'w') as file:
+        # Assuming the structure is a list of words with 'word', 'start', and 'end'
+        words = [{'word': word['word'].strip("',.\"-_/` ").lower(), 'start': word['start'], 'end': word['end']} for word in data]
+        
+        # Rewrite the modified JSON back to the same file
+        with open(infile, 'w', encoding='utf-8') as file:
             json.dump(words, file, indent=4)
     except Exception as e:
-        words = data
-    # Read the original JSON file
+        print(f"Error processing JSON file: {e}")
+        words = data  # Fallback to the original data in case of error
+
     return words
 
 
+def convert_json_format(input_filename, output_filename):
+    """
+    Converts a JSON file from a complex nested structure to a simplified structure
+    focusing on words, their start and end times.
+
+    @param input_filename: Path to the input JSON file.
+    @param output_filename: Path where the converted JSON is saved.
+    """
+    try:
+        with open(input_filename, 'r', encoding='utf-8') as infile:
+            data = json.load(infile)
+
+        # Prepare the simplified data list
+        simplified_data = []
+
+        # Assuming 'segments' key exists and contains the relevant data
+        for segment in data.get('segments', []):
+            for word_info in segment.get('words', []):
+                simplified_data.append({
+                    "word": word_info['word'],
+                    "start": word_info['start'],
+                    "end": word_info['end']
+                })
+
+        # Save the simplified data to a file
+        with open(output_filename, 'w', encoding='utf-8') as outfile:
+            json.dump(simplified_data, outfile, indent=4)
+
+        print(
+            f'The data has been successfully converted and saved to: {output_filename}')
+
+    except Exception as e:
+        print(f"Error during conversion: {e}")
+        
+        
 def remove_clicks(audio_data, sample_rate, threshold=0.1, window_size=200):
     """
     A simple click removal function that scans for sudden changes in the
@@ -142,16 +178,43 @@ def remove_clicks(audio_data, sample_rate, threshold=0.1, window_size=200):
     return cleaned_audio
 
 
+def create_new_subfolder_from_path(path):
+    # Convert the path to a Path object if it's not already
+    path = Path(path)
+
+    # Extract the parent directory
+    parent_dir = path.parent
+
+    # Get the current time and format it as day-month-time
+    # Note: for time, we're using hour-minute-second format to avoid using ':', which is not allowed in folder names
+    timestamp = datetime.now().strftime("%d-%m-%H%M%S")
+
+    # Extract the original filename (without extension)
+    original_filename = path.stem
+
+    # Combine everything to create the new folder name
+    new_folder_name = f"{timestamp}-{original_filename}"
+    new_folder_path = parent_dir / new_folder_name
+
+    # Create the new subfolder
+    new_folder_path.mkdir(parents=True, exist_ok=True)
+    print(f"New folder created at: {new_folder_path}")
+    return new_folder_path
+
+ 
+
 def remove_clicks(audio_data, sample_rate):
 
-    # Apply a median filter to remove clicks
-    audio_data_smoothed = scipy.signal.medfilt(audio_data, 5)
+    # # Apply a median filter to remove clicks
+    # audio_data_smoothed = scipy.signal.medfilt(audio_data, 5)
+    # reduced_noise = nr.reduce_noise(y=data, sr=rate)
+
+    # # Blend the smoothed audio back into the original audio to avoid artifacts
+    # alpha = 0.5
+    # audio_data_processed = (1 - alpha) * audio_data + alpha * audio_data_smoothed
     
-    # Blend the smoothed audio back into the original audio to avoid artifacts
-    alpha = 0.5
-    audio_data_processed = (1 - alpha) * audio_data + alpha * audio_data_smoothed
-    
-    return audio_data_processed
+    return nr.reduce_noise(y=audio_data, sr=sample_rate)
+
 
 def read_curse_words_from_csv(CURSE_WORD_FILE):
     curse_words_list = []

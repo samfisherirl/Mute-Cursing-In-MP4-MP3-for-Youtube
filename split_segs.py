@@ -1,53 +1,54 @@
+import subprocess
 import os
-from pydub import AudioSegment
-from datetime import timedelta
-from pathlib import Path
+from datetime import datetime
 
-def split_audio(audio_file, output_dir, segment_duration=15):
+# Assuming segment_duration is defined globally
+segment_duration = 1800  # Example: 1800 seconds (30 minutes)
+
+
+def split_audio(audio_file, output_dir, segment_duration=120):
     """
-    Split an audio file into segments of specified duration and save them in the output directory.
-
+    Splits an audio file into segments of a specified duration using ffmpeg,
+    and saves them in the provided output directory. Returns a list of paths
+    to the generated segments.
+    
     Args:
-        audio_file (str): Path to the input audio file (WAV or MP3)
-        output_dir (str): Path to the output directory
-        segment_duration (int, optional): Duration of each segment in minutes (default: 30)
-
-    Returns:
-        list: List of paths to the generated audio segments
+        audio_file (str): Path to the input audio file.
+        output_dir (str): Path to the directory where the segments will be saved.
+        segment_duration (int): Duration of each audio segment in seconds.
     """
-    # Create the output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    # Load the audio file
-    audio = AudioSegment.from_file(
-        audio_file, format=audio_file.split(".")[-1])
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    output_pattern = os.path.join(output_dir, f"segment_{timestamp}_%03d.wav")
 
-    # Calculate the duration of the audio file in minutes
-    total_duration = audio.duration_seconds / 60
+    cmd = [
+        'ffmpeg',
+        '-i', audio_file,
+        '-f', 'segment',
+        '-segment_time', str(segment_duration),
+        '-c', 'copy',
+        '-vn',  # Exclude video
+        output_pattern
+    ]
 
-    # Split the audio into segments
-    segments = []
-    fil_name = Path(audio_file).stem
-    segment_start = 0
-    segment_number = 1
-    while segment_start < total_duration:
-        segment_end = min(segment_start + segment_duration, total_duration)
-        segment = audio[segment_start * 60000:(segment_end * 60000)]
-        segment_filename = os.path.join(
-            output_dir, f"{fil_name}_{segment_number}.{audio_file.split('.')[-1]}")
-        segment.export(segment_filename, format=audio_file.split(".")[-1])
-        segments.append(segment_filename)
-        segment_start = segment_end
-        segment_number += 1
+    try:
+        subprocess.run(cmd, check=True, stderr=subprocess.PIPE, text=True)
+        print(f"Audio has been successfully split and saved to {output_dir}")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to split audio: {e.stderr}")
+        return []
 
-    return segments
-
-
+    # Generate the list of file paths for the new audio segments
+    segment_files = [os.path.join(output_dir, f) for f in os.listdir(output_dir)
+                     if f.startswith(f"segment_{timestamp}") and f.endswith('.wav')]
+    return segment_files
+    
 if __name__ == "__main__":
-    audio_file = input("Enter the path to the audio file: ")
-    output_dir = os.path.dirname(os.path.abspath(audio_file))
+    # Example usage
+    input_audio = "C:/Users/dower/Videos/Why Context Matters When Bridges Burn..._1.mp3"
+    output_dir = "C:\\Users\\dower\\Videos\\16-04-112949-Why Context Matters When Bridges Burn..._1"
+    segment_duration = 1800  # For example, 1800 seconds (30 minutes)
 
-    segments = split_audio(audio_file, output_dir)
-    print("Generated segments:")
-    for segment in segments:
-        print(segment)
+    split_audio(input_audio, output_dir, segment_duration)
