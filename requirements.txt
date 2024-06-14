@@ -11,3 +11,7 @@ torch
 torchvision 
 torchaudio
 cryptography
+pydub
+moviepy
+noisereduce
+scipy
