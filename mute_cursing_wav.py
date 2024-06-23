@@ -8,7 +8,6 @@ from pathlib import Path
 import subprocess
 import shutil
 import os
-from openai import OpenAI
 from datetime import datetime
 import moviepy.editor as mp
 from process_files import *
@@ -16,7 +15,7 @@ from censorship import *
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-def split_audio(audio_file, output_dir, segment_duration=300):
+def split_audio(audio_file, output_dir, segment_duration=100):
     """
     Splits an audio file into segments of a specified duration using ffmpeg,
     and saves them in the provided output directory. Returns a list of paths
@@ -91,22 +90,6 @@ def choose_color_hex():
     else:
         return None  # Return None if the dialog was canceled
 
-def gpt(message):
-    client = OpenAI(
-        # This is the default and can be omitted
-        api_key=os.environ.get("OPENAI_API_KEY"),
-    )
-
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {
-                "role": "user",
-                "content": "summarize with bullet points:" + message,
-            }
-        ],
-        model="gpt-3.5-turbo",
-    )
-    return chat_completion.choices[0].message.content
 
 
 def select_audio_or_video():

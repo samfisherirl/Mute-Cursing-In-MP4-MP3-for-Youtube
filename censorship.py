@@ -2,7 +2,6 @@ import csv
 from tracemalloc import start
 import numpy as np
 import wave
-from openai import audio
 import soundfile as sf
 from pathlib import Path
 from read_ import *
@@ -15,7 +14,7 @@ import json
 from scipy.io import wavfile
 # load data
 segment_duration = 3000
-buff_ratio = 1.05
+buff_ratio = 0.9
 CURSE_WORD_FILE = 'curse_words.csv'
 
 sample_audio_path = 'looperman.wav'
