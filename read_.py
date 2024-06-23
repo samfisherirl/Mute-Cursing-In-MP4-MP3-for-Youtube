@@ -1,64 +1,51 @@
 from pydub import AudioSegment
 import numpy as np
-from scipy.io.wavfile import write
+from scipy.io import wavfile
+import noisereduce as nr
+import librosa
+import soundfile as sf
+import os
+import json
 
+FADE = librosa.ex('brahms')
 
-def read_audio_file(file_path):
+def read_audio_file(filename):
     """
     Reads an audio file (.wav or .mp3) and returns it in a mono format,
     normalized between -1.0 and 1.0.
     """
-    if file_path.endswith(".mp3"):
-        audio = AudioSegment.from_mp3(file_path)
-    elif file_path.endswith(".wav"):
-        audio = AudioSegment.from_wav(file_path)
-    else:
-        raise Exception("Unsupported file format. Please use WAV or MP3.")
-    audio_mono = audio.set_channels(1)
-    samples = np.array(audio_mono.get_array_of_samples(), dtype=np.float32) / 32768.0
-    return samples, audio_mono.frame_rate
+    # Using librosa to load audio files. `sr=None` loads the file in its original sample rate
+    # mono=True ensures audio is mono
+    audio, sample_rate = librosa.load(filename, sr=None, mono=True)
+    return audio, sample_rate
 
 
-def audio_to_numpy(audio_mono):
+def numpy_to_wav(filename, samples, sample_rate):
     """
-    Converts mono audio data to a numpy array, normalized between -1.0 and 1.0.
+    Writes a numpy array of samples to a WAV file with the given sample rate.
     """
-    samples = np.array(audio_mono.get_array_of_samples())
-    # Normalize float32 array to range -1.0 to 1.0
-    return samples.astype(np.float32) / (2**15)
+    # librosa outputs float32 arrays for audio, soundfile can directly write this to WAV
+    sf.write(filename, samples, sample_rate)
 
 
-def numpy_to_wav(np_array, sample_rate, file_name):
+def numpy_to_wav(filename, samples, sample_rate):
     """
-    Correctly converts a numpy array (expected to be in float32 format) to a .wav file with int16 format,
-    ensuring proper normalization to prevent clipping and maintain audio quality.
+    Writes a numpy array of samples to a WAV file with the given sample rate.
     """
-    # First step is to find the maximum absolute value to use for normalization
-    max_val = np.abs(np_array).max()
-    if max_val > 0:  # Prevent division by zero
-        # Normalize the array to -1.0 to 1.0 if not already
-        normalized_array = np_array / max_val
-    else:
-        # In case the array is silent (all zeros), no normalization is needed
-        normalized_array = np_array
-
-    # Now, convert normalized array to int16. This scales the -1.0 to 1.0 range to -32767 to 32767.
-    int_samples = np.int16(normalized_array * 32767)
-
-    # Write the int16 samples to a WAV file
-    write(file_name, sample_rate, int_samples)
-
+    # librosa outputs float32 arrays for audio, soundfile can directly write this to WAV
+    sf.write(filename, samples, sample_rate) 
+    # perform noise reduction 
 
 class NumpyMono:
     def __init__(self, audio_file_path):
         self.audio_file_path = audio_file_path
         self.np_array, self.sample_rate = read_audio_file(audio_file_path)
-        self.output_file_name = audio_file_path + "_clean_.wav"
+        self.output_file_name = audio_file_path.replace('.wav','') + "_clean_.wav"
 
     def numpy_to_wav(self):
         # Exporting numpy array to a .wav file
-        numpy_to_wav(
-            self.np_array, self.sample_rate, self.output_file_name)
+        numpy_to_wav(self.output_file_name,
+            self.np_array, self.sample_rate)
         print('File saved as:', self.output_file_name)
 
 
@@ -67,6 +54,38 @@ if __name__ == "__main__":
     output_file_name = 'output_filename'
     NumpyMono(audio_file_path, output_file_name)
 
+
+class JSONLog:
+    def __init__(self, wav_file):
+        self.wav_file = wav_file
+        self.log_folder = os.path.join(
+            os.path.expanduser('~'), 'Documents', 'transcripter')
+        self.log_file = os.path.join(self.log_folder, 'log.json')
+        self.ensure_log_exists()
+
+    def ensure_log_exists(self):
+        if not os.path.exists(self.log_folder):
+            os.makedirs(self.log_folder)
+        if not os.path.isfile(self.log_file):
+            with open(self.log_file, 'w') as log_json:
+                initial_content = {
+                    'status': 'initialized', 'files_processed': []}
+                json.dump(initial_content, log_json)
+
+    def update_log(self, update_dict):
+        with open(self.log_file, 'r+') as log_json:
+            content = json.load(log_json)
+            content.update(update_dict)
+            log_json.seek(0)
+            json.dump(content, log_json, indent=4)
+            log_json.truncate()
+
+    def check_value(self, key):
+        with open(self.log_file, 'r') as log_json:
+            content = json.load(log_json)
+            return content.get(key, None)
+        
+    
 
 """def read_audio_file(file_path):
 Reads an audio file(.wav or .mp3) and returns it in a mono format.

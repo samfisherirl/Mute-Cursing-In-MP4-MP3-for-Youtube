@@ -12,9 +12,10 @@ import threading
 import os
 import shutil
 import json
-
+from scipy.io import wavfile
+# load data
 segment_duration = 3000
-buff_ratio = 0.9
+buff_ratio = 1.05
 CURSE_WORD_FILE = 'curse_words.csv'
 
 sample_audio_path = 'looperman.wav'
@@ -37,8 +38,8 @@ class PortableNoiseReduction:
         :param sample_rate: sample rate of the audio data in Hz.
         """
         self.array = array
-        self.start_time = start_time if start_time > 0 else 0
-        self.end_time = end_time
+        self.start_time = (start_time - 1) if start_time > 0 else 0
+        self.end_time = end_time + 1
         self.sample_rate = sample_rate
 
     def apply_noise_reduction(self):
@@ -66,6 +67,7 @@ class PortableNoiseReduction:
         return self.array
 
 
+    
 def read_curse_words_from_csv(CURSE_WORD_FILE):
     """
      Read curse words from CSV file. This is a list of words that are part of CURIE's word list
@@ -134,84 +136,94 @@ def get_word_samples(word, sample_rate):
     return (start_sample, end_sample)
 
 
-def apply_fade(audio_data, start_time, end_time, sample_rate, fade_duration=0.06):
+
+# def split_silence(sample_rate, word, audio_data, nraudio=None):
+#     """
+#     Split silence into start and end indices with a buffer. Adjust the buffer duration as needed.
+
+#     @param sample_rate - Sampling rate of the sound in Hz.
+#     @param word - Word being split. Must contain 'start' and 'end' keys.
+#     @param buffer_duration - Additional duration in seconds to add as a buffer before and after the curse word.
+
+#     @return Tuple of start and end indices including the buffer. 
+#     """
+#     global buff_ratio
+#     # Example adjustment, ensure this is defined or adjusted as needed in your context.
+
+#     diff = word['end'] - word['start']
+#     silence_end = (word['start'] + (diff * buff_ratio))
+#     silence_start = (word['end'] - (diff * buff_ratio))
+#     start_sample = max(0, int(silence_start * sample_rate))
+#     end_sample = min(int(silence_end * sample_rate), len(audio_data) - 1)
+#     audio_data[start_sample:end_sample] = 0
+
+#     start_time = word['start_time']
+#     end_time = word['end_time']
+#     start_sample = max(int(start_time * sample_rate) - 200, 0)
+#     end_sample = min(int(end_time * sample_rate) + 200, len(audio_data))
+#     # Extract section for noise reduction
+#     section_for_nr = audio_data[start_sample:end_sample]
+#     # Perform noise reduction on the section
+#     reduced_noise_section = nr.reduce_noise(y=section_for_nr, sr=sample_rate)
+#     # Re-insert the reduced noise section back into audio_data
+#     audio_data[start_sample:end_sample] = reduced_noise_section
+
+#     # audio_data_faded, fade_dict = apply_fade(
+#     #     audio_data,
+#     #     start_time,
+#     #     end_time,
+#     #     sample_rate
+#     # )
+#     # start_time = fade_dict['fade_out_end']
+#     # end_time = fade_dict['fade_in_start']
+
+#     return audio_data
+
+
+def apply_combined_fades(audio, sample_rate, start_time, stop_time, fade_duration=0.01):
     """
-    Correctly apply a fade out at the start_time and a fade in at the end_time.
+    Apply combined fades to the audio.
+
+    Args:
+        audio (ndarray): The audio data.
+        sample_rate (int): The sample rate of the audio.
+        start_time (float): The start time of the fade in seconds.
+        stop_time (float): The stop time of the fade in seconds.
+        fade_duration (float, optional): The duration of the fade in seconds. Defaults to 0.01.
+
+    Returns:
+        ndarray: The audio data with the combined fades applied.
     """
+    # Convert times to samples
+    global buff_ratio
+    original_start = start_time
+    diff = stop_time  - start_time
+    start_time = (stop_time - (diff * buff_ratio))
+    stop_time = (original_start + (diff * buff_ratio))
+    
+    fade_length = int(fade_duration * sample_rate)
     start_sample = int(start_time * sample_rate)
-    end_sample = int(end_time * sample_rate)
-    audio_length = len(audio_data)
-    fade_samples = int(fade_duration * sample_rate)
-
-    start_sample = max(0, min(start_sample, audio_length - 1))
-    end_sample = max(0, min(end_sample, audio_length - 1))
-
-    # Correcting the fade ranges according to the conventional definitions
-    # Fade out before the start (reducing volume leading into the curse)
-    fade_out_start = max(0, start_sample - fade_samples)
-    fade_out_range = range(fade_out_start, start_sample)
-
-    # Fade in after the end (increasing volume after the curse)
-    fade_in_start = end_sample
-    fade_in_range = range(fade_in_start, min(
-        fade_in_start + fade_samples, audio_length))
+    stop_sample = int(stop_time * sample_rate)
 
     # Apply fade out
-    for i, sample in enumerate(fade_out_range):
-        fade_out_factor = i / len(fade_out_range)  # Linear fade
-        audio_data[sample] *= fade_out_factor
+    fade_out_end = start_sample + fade_length
+    if fade_out_end > audio.shape[0]:
+        fade_out_end = audio.shape[0]
+    fade_out_curve = np.linspace(1.0, 0.0, fade_out_end - start_sample)
+    audio[start_sample:fade_out_end] *= fade_out_curve
 
     # Apply fade in
-    for i, sample in enumerate(fade_in_range):
-        fade_in_factor = 1 - (i / len(fade_in_range))  # Linear fade
-        audio_data[sample] *= fade_in_factor
+    fade_in_start = stop_sample - fade_length
+    if fade_in_start < 0:
+        fade_in_start = 0
+    fade_in_curve = np.linspace(0.0, 1.0, stop_sample - fade_in_start)
+    audio[fade_in_start:stop_sample] *= fade_in_curve
 
-    fade_timestamps = {
-        'fade_out_start': max(0, start_time - fade_duration),
-        'fade_out_end': start_time,
-        'fade_in_start': end_time,
-        'fade_in_end': min(end_time + fade_duration, audio_length / sample_rate)
-    }
-
-    return audio_data, fade_timestamps
-
-
-def split_silence(sample_rate, word, audio_data, nraudio=None):
-    """
-    Split silence into start and end indices with a buffer. Adjust the buffer duration as needed.
-
-    @param sample_rate - Sampling rate of the sound in Hz.
-    @param word - Word being split. Must contain 'start' and 'end' keys.
-    @param buffer_duration - Additional duration in seconds to add as a buffer before and after the curse word.
-
-    @return Tuple of start and end indices including the buffer. 
-    """
-    global buff_ratio
-    # Example adjustment, ensure this is defined or adjusted as needed in your context.
-
-    diff = word['end'] - word['start']
-    end_time = (word['start'] + (diff * buff_ratio))
-    start_time = (word['end'] - (diff * buff_ratio))
-
-    # audio_data_faded, fade_dict = apply_fade(
-    #     audio_data,
-    #     start_time,
-    #     end_time,
-    #     sample_rate
-    # )
-    # start_time = fade_dict['fade_out_end']
-    # end_time = fade_dict['fade_in_start']
-
-    start_sample = max(0, int(start_time * sample_rate))
-    end_sample = min(int(end_time * sample_rate), len(audio_data) - 1)
-    if nraudio:
-        nraudio.array = audio_data
-        nraudio.start = start_time - 0.1 if start_time > 0.1 else 0
-        nraudio.end = end_time + 0.1 if start_time + \
-            0.1 > len(audio_data) else len(audio_data)
-    return start_sample, end_sample, nraudio
-
-
+    # Ensure silence between the fades
+    audio[fade_out_end:fade_in_start] = 0
+    return audio
+    
+    
 def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_list):
     """
     Mute curse words in the audio data.
@@ -219,18 +231,12 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
     audio_data_muted = np.copy(audio_data)
     curse_words_set = set(word.lower() for word in curse_words_list)
 
-    nraudio = PortableNoiseReduction(
-        array=audio_data, start_time=0, end_time=0, sample_rate=sample_rate)
-
     for word in transcription_result:
         if word['word'].lower() in curse_words_set:
-            start_sample, end_sample, nraudio = split_silence(
-                sample_rate, word, audio_data_muted, nraudio)
+            audio_data_muted = apply_combined_fades(
+                audio_data_muted, sample_rate, word['start'], word['end'])
+            
             # Mute the section
-            audio_data_muted[start_sample:end_sample] = 0
-            nraudio = PortableNoiseReduction(
-                array=audio_data, start_time=word['start'], end_time=word['end'], sample_rate=sample_rate)
-            audio_data_muted = nraudio.apply_noise_reduction()
             # Apply fade in and fade out to the modified section
     return audio_data_muted
 
@@ -307,8 +313,8 @@ def combine_wav_files(segment_paths):
         # Initialize parameters
         nchannels, sampwidth, framerate, nframes, comptype, compname = [None]*6
         # Read params from first file
-        for segment_path in segment_paths:
-            with wave.open(f"{segment_path}_clean_.wav", 'rb') as segment_wav:
+        for segment_path in segment_paths: 
+            with wave.open(f'{segment_path}', 'rb') as segment_wav:
                 if not all([nchannels, sampwidth, framerate, comptype, compname]):
                     nchannels = segment_wav.getnchannels()
                     sampwidth = segment_wav.getsampwidth()
@@ -377,3 +383,4 @@ def process_audio(audio_file, transcript_file=None):
         audio_obj.np_array, audio_obj.sample_rate, results)
     print('exporting file now....')
     audio_obj.numpy_to_wav()
+    return audio_obj.output_file_name

@@ -196,7 +196,7 @@ def transcribe_to_json(audio_file_path, model_size="large-v3", device="cuda", co
 
 
 class AudioTranscriber:
-    def __init__(self, model_size='medium.en', device='cuda'):
+    def __init__(self, model_size='large-v3', device='cuda'):
         """
         Initialize the transcriber with a specific model size and device.
         """
@@ -204,6 +204,7 @@ class AudioTranscriber:
                                                         device=device)
         self.audio_paths = []
         self.index = len(self.audio_paths) - 1
+        self.clean_paths = []
         
     def transcribe_audio(self, audio_path, language='en', beam_size=5):
         """
@@ -233,25 +234,25 @@ class AudioTranscriber:
             srt_path = audio_path.replace(".mp3", ".srt")
             json_path = audio_path.replace(".mp3", ".json")
             ass_path = audio_path.replace(".mp3", ".ass")
-
+        print('outputting transcript files')
         # Write transcription to .srt file
         result.to_srt_vtt(srt_path)
-        result.to_ass(ass_path)
         # Prepare transcription data for JSON export
         result.save_as_json(json_path)
         self.json_path = json_path
-        
+        print('completed transcript files')
+
     def censor_cursing(self, audio_path):
-        process_audio(audio_path, self.json_path)
+        return process_audio(audio_path, self.json_path)
         
-    def process_audio(self, audio_path):
+    def transcribe_and_censor(self, audio_path):
         """
         Process an audio file, transcribe it and save the results.
         """
         result = self.transcribe_audio(audio_path)
         result.split_by_length(max_chars=20)
         self.save_transcription(audio_path, result)
-        self.censor_cursing(audio_path)
+        self.clean_paths.append(self.censor_cursing(audio_path))
         
         
 """
@@ -301,14 +302,15 @@ if __name__ == '__main__':
     transcript_paths = []
     transcriber = AudioTranscriber(model_size='large-v3', device='cuda')
     audio_path = select_audio_or_video()
+    log_ = JSONLog(audio_path)
     enums = split_audio(audio_path, 'output')
     if enums:
         for audio_path in enums: 
             print("wav_file_path type:", type(audio_path))
             print("wav_file_path content:", audio_path)
             print(f'Processing {audio_path}...')
-            transcriber.process_audio(audio_path)
+            transcriber.transcribe_and_censor(audio_path)
     else: 
         print(f'Processing {audio_path}...')
-        transcriber.process_audio(audio_path)
-        
+        transcriber.transcribe_and_censor(audio_path)
+    combine_wav_files(transcriber.clean_paths)
