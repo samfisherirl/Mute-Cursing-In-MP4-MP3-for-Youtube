@@ -7,10 +7,44 @@ import soundfile as sf
 import csv
 from pydub import AudioSegment
 import math
-import scipy
-import noisereduce as nr
+import traceback
+import wave
 
 cwd = Path(__file__).parent
+
+
+def load_wav_as_np_array(wav_file_path):
+    """
+     Load a WAV file and return the audio data as NumPy array. This function is used to load mono wav files that are stored in a file system.
+     
+     @param wav_file_path - The path to the WAV file
+     
+     @return A tuple containing the audio data and the sample
+    """
+    # Open the audio file
+    try:
+        with wave.open(wav_file_path, "rb") as wav_file:
+            # Ensure that the audio file is mono
+            if wav_file.getnchannels() != 1:
+                raise ValueError("Only mono audio files are supported.")
+
+            # Extract audio frames
+            frames = wav_file.readframes(wav_file.getnframes())
+
+            # Convert audio frames to float32 NumPy array
+            audio_data = np.frombuffer(
+                frames, dtype=np.int16).astype(np.float32)
+
+            # Normalize the audio data
+            audio_data /= np.iinfo(np.int16).max
+
+            # Return the audio data and the sample rate
+            return audio_data, wav_file.getframerate()
+    except wave.Error as e:
+        print(f"An error occurred while reading the WAV file: {wav_file_path}")
+        print(e)
+    return sf.read(wav_file_path, dtype='float64')
+
 
 
 def split_mp3(file_path):
@@ -50,6 +84,7 @@ def load_saved_transcript(json_file_path):
 
 # Function to recursively convert all strings in a JSON object to lowercase
 
+
 def main_file_audio(wav_file_path):
     # Read the audio file
     audio_data, sample_rate = sf.read(wav_file_path, dtype='float32')
@@ -86,58 +121,49 @@ def to_lowercase(input):
 
 def process_json(infile):
     words = []
-
     with open(infile, 'r', errors="replace", encoding='utf-8') as f:
         data = json.load(f)
     try:
         # Assuming the structure is a list of words with 'word', 'start', and 'end'
-        words = [{'word': word['word'].strip("',.\"-_/` ").lower(), 'start': word['start'], 'end': word['end']} for word in data]
-        
+        words = [{'word': word['word'].strip(
+            "',.\"-_/` ").lower(), 'start': word['start'], 'end': word['end']} for word in data]
+
         # Rewrite the modified JSON back to the same file
         with open(infile, 'w', encoding='utf-8') as file:
             json.dump(words, file, indent=4)
     except Exception as e:
         print(f"Error processing JSON file: {e}")
         words = data  # Fallback to the original data in case of error
-
     return words
 
 
 def convert_json_format(input_filename, output_filename):
     """
-    Converts a JSON file from a complex nested structure to a simplified structure
-    focusing on words, their start and end times.
-
+    Converts a JSON file from a complex nested structure to a simplified
+    structure focusing on words, their start, and end times.
+    
     @param input_filename: Path to the input JSON file.
     @param output_filename: Path where the converted JSON is saved.
     """
-    try:
-        with open(input_filename, 'r', encoding='utf-8') as infile:
-            data = json.load(infile)
+    with open(input_filename, 'r', encoding='utf-8') as infile:
+        data = json.load(infile)
 
-        # Prepare the simplified data list
-        simplified_data = []
+    simplified_data = []
+    for segment in data.get('segments', []):
+        for word_info in segment.get('words', []):
+            simplified_data.append({
+                "word": word_info['word'].strip(r"',.\"-_/`?!; ").lower(),
+                "start": word_info['start'],
+                "end": word_info['end']
+            })
 
-        # Assuming 'segments' key exists and contains the relevant data
-        for segment in data.get('segments', []):
-            for word_info in segment.get('words', []):
-                simplified_data.append({
-                    "word": word_info['word'],
-                    "start": word_info['start'],
-                    "end": word_info['end']
-                })
+    with open(output_filename, 'w', encoding='utf-8') as outfile:
+        json.dump(simplified_data, outfile, indent=4)
 
-        # Save the simplified data to a file
-        with open(output_filename, 'w', encoding='utf-8') as outfile:
-            json.dump(simplified_data, outfile, indent=4)
+    print(
+        f'The data has been successfully converted and saved to: {output_filename}')
+    return simplified_data
 
-        print(
-            f'The data has been successfully converted and saved to: {output_filename}')
-
-    except Exception as e:
-        print(f"Error during conversion: {e}")
-        
-        
 def remove_clicks(audio_data, sample_rate, threshold=0.1, window_size=200):
     """
     A simple click removal function that scans for sudden changes in the
@@ -157,7 +183,6 @@ def remove_clicks(audio_data, sample_rate, threshold=0.1, window_size=200):
     cleaned_audio : numpy.array
         The audio data with clicks removed.
     """
-    
     max_amplitude = np.max(np.abs(audio_data))
     click_threshold = max_amplitude * threshold
     cleaned_audio = np.copy(audio_data)
@@ -201,19 +226,6 @@ def create_new_subfolder_from_path(path):
     print(f"New folder created at: {new_folder_path}")
     return new_folder_path
 
- 
-
-def remove_clicks(audio_data, sample_rate):
-
-    # # Apply a median filter to remove clicks
-    # audio_data_smoothed = scipy.signal.medfilt(audio_data, 5)
-    # reduced_noise = nr.reduce_noise(y=data, sr=rate)
-
-    # # Blend the smoothed audio back into the original audio to avoid artifacts
-    # alpha = 0.5
-    # audio_data_processed = (1 - alpha) * audio_data + alpha * audio_data_smoothed
-    
-    return nr.reduce_noise(y=audio_data, sr=sample_rate)
 
 
 def read_curse_words_from_csv(CURSE_WORD_FILE):
@@ -255,3 +267,11 @@ def replace_audio(mp4_path, wav_path):
     video_clip.write_videofile(
         str(output_path), codec='libx264', audio_codec='aac')
 
+
+if __name__ == "__main__":
+    # Split the MP3 file into segments
+    c = r'C:\Users\dower\Downloads\transcription.json'
+    r = convert_json_format(c, f'{c}2.json')
+
+    print()
+    # Process the JSON file
