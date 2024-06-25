@@ -15,7 +15,7 @@ from censorship import *
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-def split_audio(audio_file, output_dir, segment_duration=100):
+def split_audio(audio_file, output_dir, segment_duration=60):
     """
     Splits an audio file into segments of a specified duration using ffmpeg,
     and saves them in the provided output directory. Returns a list of paths
@@ -183,7 +183,7 @@ class AudioTranscriber:
         """
         Initialize the transcriber with a specific model size and device.
         """
-        self.model = stable_whisper.load_faster_whisper(model_size_or_path=model_size,
+        self.model = stable_whisper.load_model(model_size,
                                                         device=device)
         self.audio_paths = []
         self.index = len(self.audio_paths) - 1
@@ -195,13 +195,12 @@ class AudioTranscriber:
         """
         self.audio_paths.append(audio_path)
         self.json_paths = []
-        return self.model.transcribe_stable(
+        return self.model.transcribe(
             audio_path,
             word_timestamps=True,
-            language=language,
-            beam_size=beam_size,
-            vad_filter=True,
-            vad_parameters={'min_silence_duration_ms': 200}
+            language=language
+            #beam_size=beam_size
+            # vad_filter=False,
         )
 
     def save_transcription(self, audio_path, result):
@@ -288,10 +287,11 @@ if __name__ == '__main__':
     log_ = JSONLog(audio_path)
     enums = split_audio(audio_path, 'output')
     if enums:
-        for audio_path in enums: 
+        for counter, audio_path in enumerate(enums): 
             print("wav_file_path type:", type(audio_path))
             print("wav_file_path content:", audio_path)
-            print(f'Processing {audio_path}...')
+            print(
+                f'Processing {audio_path}...\n@@@@@@@@@@@@@@@@@@@\nindex {counter} of {len(enums)}\n@@@@@@@@@@@@@@@@@@@\n')
             transcriber.transcribe_and_censor(audio_path)
     else: 
         print(f'Processing {audio_path}...')
