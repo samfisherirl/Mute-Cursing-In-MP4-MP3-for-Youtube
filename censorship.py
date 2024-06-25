@@ -14,7 +14,7 @@ import json
 from scipy.io import wavfile
 # load data
 segment_duration = 3000
-buff_ratio = 0.9
+buff_ratio = 0.95
 CURSE_WORD_FILE = 'curse_words.csv'
 
 sample_audio_path = 'looperman.wav'
@@ -306,24 +306,15 @@ def combine_wav_files(segment_paths):
 
     output_nam = Path(segment_paths[0]).name
     output_path = Path(segment_paths[0]).parent / \
-        f"{output_nam}combined_output.wav"
-
-    with wave.open(str(output_path), 'wb') as output_wav:
+        f"{output_nam}combined.wav"
+    print('\n\ncombining!\n\n')
+    with wave.open(str(output_path), 'w') as outfile:
         # Initialize parameters
-        nchannels, sampwidth, framerate, nframes, comptype, compname = [None]*6
-        # Read params from first file
-        for segment_path in segment_paths: 
-            with wave.open(f'{segment_path}', 'rb') as segment_wav:
-                if not all([nchannels, sampwidth, framerate, comptype, compname]):
-                    nchannels = segment_wav.getnchannels()
-                    sampwidth = segment_wav.getsampwidth()
-                    framerate = segment_wav.getframerate()
-                    comptype = segment_wav.getcomptype()
-                    compname = segment_wav.getcompname()
-                    output_wav.setparams(
-                        (nchannels, sampwidth, framerate, nframes, comptype, compname))
-                output_wav.writeframes(
-                    segment_wav.readframes(segment_wav.getnframes()))
+        for _, segment_path in enumerate(segment_paths):
+            with wave.open(segment_path, 'r') as infile:
+                if not outfile.getnframes():
+                    outfile.setparams(infile.getparams())
+                outfile.writeframes(infile.readframes(infile.getnframes()))
 
     home = os.path.expanduser("~")
     # Construct the path to the user's download folder based on the OS
