@@ -254,7 +254,9 @@ model = stable_whisper.load_faster_whisper(
 if __name__ == '__main__':
     global transcript_paths
     transcript_paths = []
+    print('loading model')
     transcriber = AudioTranscriber(model_size='large-v3', device='cuda')
+    print('finished')
     audio_path = select_audio_or_video()
     log_ = JSONLog(audio_path)
     enums = split_audio(audio_path, 'output')
@@ -263,7 +265,7 @@ if __name__ == '__main__':
             print("wav_file_path type:", type(audio_path))
             print("wav_file_path content:", audio_path)
             print(
-                f'Processing {audio_path}...\n@@@@@@@@@@@@@@@@@@@\nindex {counter} of {len(enums)}\n@@@@@@@@@@@@@@@@@@@\n')
+                f'\n\nProcessing {audio_path}...\n@@@@@@@@@@@@@@@@@@@\nindex {counter} of {len(enums)}\n@@@@@@@@@@@@@@@@@@@\n')
             transcriber.transcribe_and_censor(audio_path)
     else: 
         print(f'Processing {audio_path}...')

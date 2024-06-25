@@ -77,11 +77,9 @@ def read_curse_words_from_csv(CURSE_WORD_FILE):
     """
     curse_words_list = []
     with open(CURSE_WORD_FILE, newline='') as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            # Assuming curse words are in column A
-            curse_words_list.append(row[0])
-    return curse_words_list
+        lines = [line for line in csvfile.readlines() if line != ""]
+    lines_update = [line.lower().strip() for line in lines if line != ""]
+    return lines_update
 
 
 def load_wav_as_np_array(wav_file_path):
@@ -152,10 +150,11 @@ def apply_combined_fades(audio, sample_rate, start_time, stop_time, fade_duratio
     """
     # Convert times to samples
     global buff_ratio
+    original_start = 0
     original_start = start_time
     diff = stop_time  - start_time
     start_time = (stop_time - (diff * buff_ratio))
-    stop_time = (original_start + (diff * buff_ratio))
+    # stop_time = (original_start + (diff * buff_ratio))
     
     fade_length = int(fade_duration * sample_rate)
     start_sample = int(start_time * sample_rate)
@@ -194,14 +193,17 @@ def mute_curse_words(audio_data, sample_rate, transcription_result, curse_words_
     for word in transcription_result:
         if len(word['word']) < 3:
             continue
-        if any(curse.lower() in word['word'].lower() for curse in curse_words_list):
+        matched_curse = next(
+            (curse for curse in curse_words_list if curse in word['word'].lower()), None)
+        if matched_curse:
             if log == True:
-                print(f"-> {word['word']}")
+                print(
+                    f"curse:{matched_curse} -> transcript word:{word['word']} -> prob {word['probability']}")
             audio_data_muted = apply_combined_fades(
                 audio_data_muted, sample_rate, word['start'], word['end'])
-            
-            # Mute the section
-            # Apply fade in and fade out to the modified section
+            """
+            potential
+            take word['probability'] look at ratio, and if it is below a certain threshold, then mute the word"""
     return audio_data_muted
 
 
@@ -307,7 +309,8 @@ def convert_json_format(input_filename, output_filename):
             simplified_data.append({
                 "word": word_info['word'].strip(r"',.\"-_/`?!; ").lower(),
                 "start": word_info['start'],
-                "end": word_info['end']
+                "end": word_info['end'],
+                'probability': word_info['probability']
             })
 
     with open(output_filename, 'w', encoding='utf-8') as outfile:
