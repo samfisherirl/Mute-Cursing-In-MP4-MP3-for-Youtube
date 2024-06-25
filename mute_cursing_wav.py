@@ -1,7 +1,6 @@
 from tkinter.colorchooser import askcolor
 import stable_whisper
 import json
-from faster_whisper import WhisperModel
 import tkinter as tk
 from tkinter import filedialog
 from pathlib import Path
@@ -12,6 +11,15 @@ from datetime import datetime
 import moviepy.editor as mp
 from process_files import *
 from censorship import *
+import re
+
+
+def clean_path(path_str):
+    path = Path(path_str)
+    clean_name = re.sub(r'[^a-zA-Z0-9]+', '_', path.stem)
+    clean_name = re.sub(r'_+', '_', clean_name)
+    return path.with_stem(clean_name)
+
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
@@ -29,10 +37,11 @@ def split_audio(audio_file, output_dir, segment_duration=60):
     Returns:
         List[str]: List of paths to the generated audio segment files.
     """
-    audio_path = Path(audio_file)
-    output_dir = Path(audio_file).parent
+    
+    audio_path = clean_path(audio_file)
+    output_dir = audio_path.parent
     output_dir.mkdir(parents=True, exist_ok=True)
-
+    shutil.copy(str(audio_file), str(audio_path))
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     output_pattern = str(
         output_dir / f"{audio_path.stem}_{timestamp}_%03d.wav")
@@ -48,7 +57,10 @@ def split_audio(audio_file, output_dir, segment_duration=60):
     ]
 
     try:
-        subprocess.run(cmd, check=True, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(
+            cmd, check=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+        print("STDOUT:", result.stdout)
+        print("STDERR:", result.stderr)
         print(f"Audio has been successfully split and saved to {output_dir}")
     except subprocess.CalledProcessError as e:
         print(f"Failed to split audio: {e.stderr}")
@@ -116,6 +128,11 @@ def select_audio_or_video():
         print(f'Audio/Video file selected: {av_path}')
         folder = Path(av_path).parent / Path(av_path).stem
         folder.mkdir(parents=True, exist_ok=True)
+        try:
+            os.remove(folder)
+        except Exception as e:
+            print(str(e))
+        folder.mkdir(parents=True, exist_ok=True)
         av_new = str(folder / Path(av_path).name)
         shutil.copy(av_path, av_new)
         return av_new
@@ -131,51 +148,6 @@ def convert_video_to_audio(video_path, audio_path):
     cmd = f'ffmpeg -y -i "{video_path}" -acodec pcm_s16le -ar 16000 "{audio_path}"'
     subprocess.run(cmd, shell=True, check=True)
     return audio_path
-
-
-def transcribe_to_json(audio_file_path, model_size="large-v3", device="cuda", compute_type="float16", beam_size=5, language=None, condition_on_previous_text=True, word_timestamps=False, vad_filter=False, vad_parameters=None):
-    """
-    Transcribe an audio file and save the transcription results to a JSON file.
-    """
-    # Initialize WhisperModel
-    model = WhisperModel(model_size_or_path=model_size,
-                         device=device, compute_type=compute_type)
-
-    transcribe_args = {"beam_size": beam_size}
-    if language:
-        transcribe_args["language"] = language
-    if condition_on_previous_text is not None:
-        transcribe_args["condition_on_previous_text"] = condition_on_previous_text
-    if word_timestamps:
-        transcribe_args["word_timestamps"] = word_timestamps
-    if vad_filter:
-        transcribe_args["vad_filter"] = vad_filter
-        if vad_parameters:
-            transcribe_args["vad_parameters"] = vad_parameters
-
-    # Transcribe the audio file
-    segments, info = model.transcribe(audio_file_path, **transcribe_args)
-
-
-    transcription_data = {
-        "audio_file": audio_file_path,
-        "detected_language": info.language,
-        "language_probability": info.language_probability,
-        "transcription": [
-            {"start": segment.start,
-            "end": segment.end,
-            "words": [{"start": word.start, "end": word.end, "word": word.word} for word in segment.words]} if word_timestamps
-            else {"start": segment.start, "end": segment.end, "text": segment.text}
-            for segment in segments
-        ]
-    }
-    # Write transcription data to JSON file
-    json_file_path = audio_file_path.replace(".mp3", "_transcription.json")
-    with open(json_file_path, 'w') as json_file:
-        json.dump(transcription_data, json_file, indent=4)
-
-    print(
-        f"Transcription for '{audio_file_path}' has been written to '{json_file_path}'")
 
 
 class AudioTranscriber:
