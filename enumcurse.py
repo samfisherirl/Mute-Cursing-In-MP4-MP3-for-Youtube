@@ -12,5 +12,4 @@ def enumcurseing():
     with open("curse_words_new.csv", 'w') as file:
         file.writelines(lines)
         
-        
 enumcurseing()

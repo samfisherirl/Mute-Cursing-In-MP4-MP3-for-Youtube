@@ -191,6 +191,7 @@ class AudioTranscriber:
         print('outputting transcript files')
         # Write transcription to .srt file
         result.to_srt_vtt(srt_path)
+        result.to_ass(ass_path)
         # Prepare transcription data for JSON export
         result.save_as_json(json_path)
         self.json_path = json_path
