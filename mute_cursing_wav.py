@@ -12,7 +12,7 @@ import moviepy.editor as mp
 from process_files import *
 from censorship import *
 import re
-
+from datetime import datetime, timedelta
 
 def clean_path(path_str):
     path = Path(path_str)
@@ -160,7 +160,43 @@ class AudioTranscriber:
         self.audio_paths = []
         self.index = len(self.audio_paths) - 1
         self.clean_paths = []
+        self.srt_paths = []
+
+    def add_time(self, time_str, minutes=1):
+        """Add minutes to SRT timestamp, adjusting for fractional seconds."""
+        base_time = datetime.strptime(time_str.split(',')[0], '%H:%M:%S')
+        milliseconds = int(time_str.split(',')[1]) if ',' in time_str else 0
+        added_time = base_time + \
+            timedelta(minutes=minutes, milliseconds=milliseconds)
+        return added_time.strftime('%H:%M:%S,') + f"{milliseconds:03d}"
         
+    def srt_combine(self):
+        combined_content = ''
+        subtitle_number = 1
+        additional_minutes = 0
+        for index, file_path in enumerate(self.srt_paths):
+            if index > 0:
+                combined_content += '\n'
+            with open(file_path, 'r', encoding='utf-8') as file:
+                lines = file.readlines()
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+                if line.strip().isdigit():
+                    lines[i] = f"{subtitle_number}\n"
+                    subtitle_number += 1
+                elif '-->' in line:
+                    start_time, end_time = line.split(' --> ')
+                    lines[i] = f"{self.add_time(start_time, additional_minutes)} --> {self.add_time(end_time, additional_minutes)}\n"
+                combined_content += lines[i]
+                i += 1
+            additional_minutes += 1
+            combined_content += '\n'
+        name = Path(self.srt_paths[0]).stem
+        output_file_prt = Path(self.srt_paths[0]).parent.parent / f'{name}.srt'
+        with open(str(output_file_prt), 'w', encoding='utf-8') as file:
+            file.write(combined_content.strip())
+            
     def transcribe_audio(self, audio_path, language='en', beam_size=5):
         """
         Transcribe the given audio file and return the transcription result.
@@ -191,12 +227,12 @@ class AudioTranscriber:
         print('outputting transcript files')
         # Write transcription to .srt file
         result.to_srt_vtt(srt_path)
-        result.to_ass(ass_path)
         # Prepare transcription data for JSON export
         result.save_as_json(json_path)
         self.json_path = json_path
         print('completed transcript files')
-
+        self.srt_paths.append(srt_path)
+        
     def censor_cursing(self, audio_path):
         return process_audio(audio_path, self.json_path)
         
@@ -210,48 +246,6 @@ class AudioTranscriber:
         self.clean_paths.append(self.censor_cursing(audio_path))
         
         
-"""
-model = stable_whisper.load_faster_whisper(model_size_or_path='base',
-                                           device='cuda'
-                                           )
-audio_path = select_audio_or_video()
-result = model.transcribe_stable(
-    audio_path,
-    word_timestamps=True,
-    language='en',
-    beam_size=5,
-    vad_filter=True,
-    vad_parameters=dict(min_silence_duration_ms=200)
-)
-
-if "wav" in audio_path:
-    srt_path = audio_path.replace(".wav", ".srt")
-    json_path = audio_path.replace(".wav", ".json")
-else:
-    srt_path = audio_path.replace(".mp3", ".srt")
-    json_path = audio_path.replace(".mp3", ".json")
-# Write transcription to .srt file directly utilizing to_srt_vtt() method.
-result.to_srt_vtt(srt_path)  # Assuming 'to_srt_vYour `file_to_fix.py` script aims to utilize functionalities from `stable_whisper`, a hypothetical API for transcript processing, to perform enhanced audio transcription. However, based on the initial documentation and the error message provided in your first query, I noted that your script includes several parameters and method names that need to be adjusted to align with the documentation details you've shared. Below is a corrected version of the `file_to_fix.py`.
-
-# Prepare for JSON export, extracting essential data for a compact, informative JSON structure.
-transcript_json = {
-    'audio_file': 'audio.mp3',
-    'transcription': result.segments
-    # Additional metadata
-}
-
-# Write JSON output
-with open(json_path, 'w') as json_file:
-    json.dump(transcript_json, json_file, ensure_ascii=False, indent=4)
-
-
-# Load the Whisper model with specific enhancements.
-model = stable_whisper.load_faster_whisper(
-    model_size_or_path='base',
-    # Additional options like device and dynamic quantization (dq) were not specified in the documentation snippet provided.
-)
-"""
-
 if __name__ == '__main__':
     global transcript_paths
     transcript_paths = []
@@ -272,3 +266,4 @@ if __name__ == '__main__':
         print(f'Processing {audio_path}...')
         transcriber.transcribe_and_censor(audio_path)
     combine_wav_files(transcriber.clean_paths)
+    transcriber.srt_combine()
