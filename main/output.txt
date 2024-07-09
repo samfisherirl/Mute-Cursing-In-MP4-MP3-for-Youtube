@@ -1,0 +1,20 @@
+Creating virtual environment...
+Requirement already satisfied: pip in c:\users\dower\documents\github\mute-cursing-in-mp4-mp3-for-youtube\main\venv\lib\site-packages (23.0.1)
+Collecting pip
+  Using cached pip-24.1.2-py3-none-any.whl (1.8 MB)
+Installing collected packages: pip
+  Attempting uninstall: pip
+    Found existing installation: pip 23.0.1
+    Uninstalling pip-23.0.1:
+      Successfully uninstalled pip-23.0.1
+Successfully installed pip-24.1.2
+Looking in indexes: https://download.pytorch.org/whl/cu118
+Collecting git+https://github.com/jianfch/stable-ts.git (from -r requirements.txt (line 1))
+  Cloning https://github.com/jianfch/stable-ts.git to c:\users\dower\appdata\local\temp\pip-req-build-bwho4sem
+  Resolved https://github.com/jianfch/stable-ts.git to commit 5f1461f6f629ea797ee6b68e6552ef10bdd8b378
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'error'
+Virtual environment activated.
+Installing dependencies...
+Dependencies installed.
+(venv) C:\Users\dower\Documents\GitHub\Mute-Cursing-In-MP4-MP3-for-Youtube>
