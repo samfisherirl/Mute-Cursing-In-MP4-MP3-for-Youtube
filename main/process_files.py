@@ -1,7 +1,9 @@
+from tkinter import filedialog
+import subprocess
 from moviepy.editor import VideoFileClip, AudioFileClip
 from pathlib import Path
 import json
-from datetime import datetime
+import datetime
 import numpy as np
 import soundfile as sf
 import csv
@@ -9,6 +11,12 @@ from pydub import AudioSegment
 import math
 import traceback
 import wave
+import tkinter as tk
+from tkinter import filedialog
+import json
+import subprocess
+import pysrt 
+import re 
 
 cwd = Path(__file__).parent
 
@@ -45,6 +53,108 @@ def load_wav_as_np_array(wav_file_path):
         print(e)
     return sf.read(wav_file_path, dtype='float64')
 
+
+def remove_clicks(audio_data, sample_rate, threshold=0.1, window_size=200):
+    """
+    A simple click removal function that scans for sudden changes in the
+    audio signal amplitude and smoothes them out by interpolating the waveform.
+
+    Parameters:
+    audio_data : numpy.array
+        The audio data.
+    sample_rate : int
+        The sample rate of the audio data.
+    threshold : float
+        The threshold for detecting a click (relative to max amplitude).
+    window_size : int
+        The number of samples used for interpolation around the click.
+
+    Returns:
+    cleaned_audio : numpy.array
+        The audio data with clicks removed.
+    """
+    max_amplitude = np.max(np.abs(audio_data))
+    click_threshold = max_amplitude * threshold
+    cleaned_audio = np.copy(audio_data)
+
+    # Iteratively scan for abrupt changes that may indicate clicks
+    for i in range(1, len(audio_data) - 1):
+        if np.abs(audio_data[i] - audio_data[i-1]) > click_threshold and \
+                np.abs(audio_data[i] - audio_data[i+1]) > click_threshold:
+            # Detected a click, interpolate to remove
+            start = max(0, i - window_size // 2)
+            end = min(len(audio_data), i + window_size // 2)
+            cleaned_audio[start:end] = np.interp(
+                np.arange(start, end),
+                np.array([start, end]),
+                np.array([audio_data[start], audio_data[end]])
+            )
+
+    return cleaned_audio
+
+
+def create_new_subfolder_from_path(path):
+    # Convert the path to a Path object if it's not already
+    path = Path(path)
+
+    # Extract the parent directory
+    parent_dir = path.parent
+
+    # Get the current time and format it as day-month-time
+    # Note: for time, we're using hour-minute-second format to avoid using ':', which is not allowed in folder names
+    timestamp = datetime.datetime.now().strftime("%d-%m-%H%M%S")
+
+    # Extract the original filename (without extension)
+    original_filename = path.stem
+
+    # Combine everything to create the new folder name
+    new_folder_name = f"{timestamp}-{original_filename}"
+    new_folder_path = parent_dir / new_folder_name
+
+    # Create the new subfolder
+    new_folder_path.mkdir(parents=True, exist_ok=True)
+    print(f"New folder created at: {new_folder_path}")
+    return new_folder_path
+
+
+def read_curse_words_from_csv(CURSE_WORD_FILE):
+    curse_words_list = []
+    with open(CURSE_WORD_FILE, newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            # Assuming curse words are in column A
+            curse_words_list.append(row[0])
+    return curse_words_list
+
+# Function to mute curse words in the audio
+
+
+def replace_audio(mp4_path, wav_path):
+    # Create a Path object from the mp4 path
+    original_video_path = Path(mp4_path)
+
+    # Get the directory and the name without extension
+    directory = original_video_path.parent
+    original_name = original_video_path.stem
+
+    # Define the new output path
+    output_path = directory / f"{original_name}_cleaned.mp4"
+
+    # Convert Path objects to strings before passing to moviepy
+    video_clip = VideoFileClip(str(mp4_path))
+    audio_clip = AudioFileClip(str(wav_path))
+
+    # Ensure the audio is the same duration as the video
+    if audio_clip.duration != video_clip.duration:
+        raise ValueError(
+            "The durations of the video and audio files do not match.")
+
+    # Set the audio of the video clip to the new audio
+    video_clip = video_clip.set_audio(audio_clip)
+
+    # Write the result to a file
+    video_clip.write_videofile(
+        str(output_path), codec='libx264', audio_codec='aac')
 
 
 def split_mp3(file_path):
@@ -164,108 +274,86 @@ def convert_json_format(input_filename, output_filename):
         f'The data has been successfully converted and saved to: {output_filename}')
     return simplified_data
 
-def remove_clicks(audio_data, sample_rate, threshold=0.1, window_size=200):
-    """
-    A simple click removal function that scans for sudden changes in the
-    audio signal amplitude and smoothes them out by interpolating the waveform.
 
-    Parameters:
-    audio_data : numpy.array
-        The audio data.
-    sample_rate : int
-        The sample rate of the audio data.
-    threshold : float
-        The threshold for detecting a click (relative to max amplitude).
-    window_size : int
-        The number of samples used for interpolation around the click.
-
-    Returns:
-    cleaned_audio : numpy.array
-        The audio data with clicks removed.
-    """
-    max_amplitude = np.max(np.abs(audio_data))
-    click_threshold = max_amplitude * threshold
-    cleaned_audio = np.copy(audio_data)
-
-    # Iteratively scan for abrupt changes that may indicate clicks
-    for i in range(1, len(audio_data) - 1):
-        if np.abs(audio_data[i] - audio_data[i-1]) > click_threshold and \
-                np.abs(audio_data[i] - audio_data[i+1]) > click_threshold:
-            # Detected a click, interpolate to remove
-            start = max(0, i - window_size // 2)
-            end = min(len(audio_data), i + window_size // 2)
-            cleaned_audio[start:end] = np.interp(
-                np.arange(start, end),
-                np.array([start, end]),
-                np.array([audio_data[start], audio_data[end]])
-            )
-
-    return cleaned_audio
+SILENCE_GAP = 100  # Silence gap threshold in milliseconds
 
 
-def create_new_subfolder_from_path(path):
-    # Convert the path to a Path object if it's not already
-    path = Path(path)
-
-    # Extract the parent directory
-    parent_dir = path.parent
-
-    # Get the current time and format it as day-month-time
-    # Note: for time, we're using hour-minute-second format to avoid using ':', which is not allowed in folder names
-    timestamp = datetime.now().strftime("%d-%m-%H%M%S")
-
-    # Extract the original filename (without extension)
-    original_filename = path.stem
-
-    # Combine everything to create the new folder name
-    new_folder_name = f"{timestamp}-{original_filename}"
-    new_folder_path = parent_dir / new_folder_name
-
-    # Create the new subfolder
-    new_folder_path.mkdir(parents=True, exist_ok=True)
-    print(f"New folder created at: {new_folder_path}")
-    return new_folder_path
+def select_file():
+    root = tk.Tk()
+    root.withdraw()  # Hide the main window
+    file_path = filedialog.askopenfilename()
+    return file_path
 
 
+def process_srt(srt_file):
+    gaps = []
+    with open(srt_file, 'r') as file:
+        content = file.read()
+        timestamps = re.findall(
+            r'\d{2}:\d{2}:\d{2},\d{3} --> \d{2}:\d{2}:\d{2},\d{3}', content)
+        prev_end_time = 0
+        for timestamp in timestamps:
+            start_time, end_time = timestamp.split(' --> ')
+            start_time_ms = convert_to_ms(start_time)
+            end_time_ms = convert_to_ms(end_time)
+            if start_time_ms - prev_end_time > 200:
+                gaps.append((convert_to_ffmpeg_time(prev_end_time),
+                            convert_to_ffmpeg_time(start_time_ms)))
+            prev_end_time = end_time_ms
 
-def read_curse_words_from_csv(CURSE_WORD_FILE):
-    curse_words_list = []
-    with open(CURSE_WORD_FILE, newline='') as csvfile:
-        reader = csv.reader(csvfile)
-        for row in reader:
-            # Assuming curse words are in column A
-            curse_words_list.append(row[0])
-    return curse_words_list
-
-# Function to mute curse words in the audio
+    return gaps
 
 
-def replace_audio(mp4_path, wav_path):
-    # Create a Path object from the mp4 path
-    original_video_path = Path(mp4_path)
+def convert_to_ms(s):
+    hours, minutes, seconds = s[:-4].split(':')
+    milliseconds = int(s[-3:])
+    return (int(hours) * 3600000) + (int(minutes) * 60000) + (int(seconds) * 1000) + milliseconds
 
-    # Get the directory and the name without extension
-    directory = original_video_path.parent
-    original_name = original_video_path.stem
 
-    # Define the new output path
-    output_path = directory / f"{original_name}_cleaned.mp4"
+def convert_to_ffmpeg_time(ms):
+    hours = ms // 3600000
+    minutes = (ms % 3600000) // 60000
+    seconds = (ms % 60000) // 1000
+    milliseconds = ms % 1000
+    return f"{hours:02}:{minutes:02}:{seconds:02}.{milliseconds:03}"
 
-    # Convert Path objects to strings before passing to moviepy
-    video_clip = VideoFileClip(str(mp4_path))
-    audio_clip = AudioFileClip(str(wav_path))
 
-    # Ensure the audio is the same duration as the video
-    if audio_clip.duration != video_clip.duration:
-        raise ValueError(
-            "The durations of the video and audio files do not match.")
+def merge_crops(video_file, gaps):
+    commands = []
+    for i, (start, end) in enumerate(gaps):
+        commands.append(
+            f"ffmpeg -i {video_file} -ss {start} -to {end} -c copy output_{i}.mp4")
+    commands.append(
+        "ffmpeg -f concat -safe 0 -i inputs.txt -c copy output.mp4")
 
-    # Set the audio of the video clip to the new audio
-    video_clip = video_clip.set_audio(audio_clip)
+    with open('inputs.txt', 'w') as f:
+        for i in range(len(gaps)):
+            f.write(f"file 'output_{i}.mp4'\n")
 
-    # Write the result to a file
-    video_clip.write_videofile(
-        str(output_path), codec='libx264', audio_codec='aac')
+    for command in commands:
+        subprocess.run(command, shell=True)
+
+def crop_video(input_srt):
+    print("Select the input video file to process:")
+    input_video = select_file()
+    if not input_video:
+        print("No video file selected. Exiting.")
+        return
+    merge_crops(input_video,
+                    process_srt(input_srt))
+
+
+
+def load_json(infile):
+    try:
+        with open(infile, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return [{'word': word['word'].strip(
+            "',.\"-_/` ").lower(), 'start': word['start'], 'end': word['end']} for word in data]
+    except Exception as e:
+        print("Error reading JSON:", e)
+        return []
+    return data
 
 
 if __name__ == "__main__":

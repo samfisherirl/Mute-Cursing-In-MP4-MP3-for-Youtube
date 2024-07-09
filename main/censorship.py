@@ -5,14 +5,14 @@ import wave
 import soundfile as sf
 from pathlib import Path
 from read_ import *
-# Define paths and file namesimport noisereduce as nr
 import noisereduce as nr
 import threading
 import os
 import shutil
 import json
 from scipy.io import wavfile
-# load data
+
+
 segment_duration = 3000
 buff_ratio = 0.95
 CURSE_WORD_FILE = 'curse_words.csv'
@@ -290,6 +290,7 @@ def combine_wav_files(segment_paths):
     outfile_finished = os.path.join(
         download_folder, f"{output_nam}combined_output.wav")
     shutil.copyfile(output_path, outfile_finished)
+    return outfile_finished
 
 
 def convert_json_format(input_filename, output_filename):
@@ -318,7 +319,7 @@ def convert_json_format(input_filename, output_filename):
 
     print(
         f'The data has been successfully converted and saved to: {output_filename}')
-    return simplified_data
+    return simplified_data, output_filename
 
 
 def process_audio(audio_file, transcript_file=None):
@@ -335,11 +336,11 @@ def process_audio(audio_file, transcript_file=None):
     print('reading audio')
     audio_obj = NumpyMono(audio_file)
     print('process json')
-    results = convert_json_format(
+    results, clean_json = convert_json_format(
         transcript_file, f'{transcript_file}_new.json')
     print('find curse words')
     audio_obj.np_array = find_curse_words(
         audio_obj.np_array, audio_obj.sample_rate, results)
     print('exporting file now....')
     audio_obj.numpy_to_wav()
-    return audio_obj.output_file_name
+    return audio_obj.output_file_name, clean_json
