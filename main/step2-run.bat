@@ -1,46 +1,46 @@
 @echo off
-SET venv_dir=main\venv
-SET pyfile=main\mute_cursing_wav.py
-SET python=%venv_dir%\Scripts\python.exe
+SET venv_dir=venv
+SET pyfile=mute_cursing_wav.py
+SET requirements_file=requirements.txt
 
-REM Check if the virtual environment directory exists
+REM Create or activate the virtual environment
 IF EXIST "%venv_dir%\Scripts\activate.bat" (
     ECHO Virtual environment found. Activating...
-    CALL %venv_dir%\Scripts\activate.bat
 ) ELSE (
     ECHO Creating virtual environment...
     python -m venv %venv_dir%
-    CALL %venv_dir%\Scripts\activate.bat
 )
-%python% -m pip install --upgrade pip
-%python% -m pip install -r requirements.txt
 
-REM Check if the virtual environment is activated
-IF NOT "%VIRTUAL_ENV%" == "" (
-    ECHO Virtual environment activated.
-    ECHO Installing dependencies...
+CALL %venv_dir%\Scripts\activate.bat
 
-    ECHO Dependencies installed.
-    
-    REM Check if the specified pyfile exists, if not, find the first .py file except __init__.py
-    IF NOT EXIST "%pyfile%" (
-        FOR /F "delims=" %%i IN ('DIR *.py /B /A:-D /O:N 2^>nul') DO (
-            IF NOT "%%i" == "__init__.py" (
-                SET "pyfile=%%i"
-                GOTO FoundPyFile
-            )
-        )
-        ECHO No suitable Python file found. Exiting...
-        GOTO End
-    )
-    
-    :FoundPyFile
-    REM Run the Python script
-    %python% %pyfile%
+REM Upgrade pip and install dependencies
+ECHO Upgrading pip...
+%venv_dir%\Scripts\python.exe -m pip install --upgrade pip
+
+ECHO Installing dependencies from %requirements_file%...
+%venv_dir%\Scripts\python.exe -m pip install --upgrade -r %requirements_file%
+
+REM Check for the specific Python file's existence or find another suitable one
+IF EXIST "%pyfile%" (
+    ECHO Found specified Python script: %pyfile%
 ) ELSE (
-    ECHO Failed to activate virtual environment.
+    ECHO Specified Python script not found. Looking for an alternative...
+    FOR /F "delims=" %%i IN ('DIR *.py /B /A:-D /O:N 2^>nul') DO (
+        IF NOT "%%i" == "__init__.py" (
+            SET "pyfile=%%i"
+            ECHO Found alternative script: %%i
+            GOTO ExecutePyFile
+        )
+    )
+    ECHO No suitable Python file found. Exiting...
+    GOTO End
 )
+
+:ExecutePyFile
+REM Run the Python script
+ECHO Running Python script: %pyfile%
+%venv_dir%\Scripts\python.exe %pyfile%
 
 :End
-REM Pause the command window
-cmd /k 
+REM Keep the command window open
+pause
