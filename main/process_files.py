@@ -9,13 +9,11 @@ import soundfile as sf
 import csv
 from pydub import AudioSegment
 import math
-import traceback
 import wave
 import tkinter as tk
 from tkinter import filedialog
 import json
 import subprocess
-import pysrt 
 import re 
 
 cwd = Path(__file__).parent

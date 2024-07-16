@@ -1,10 +1,34 @@
+from genericpath import isfile
+from tkinter.messagebox import showinfo
+from tkinter import Tk
 import subprocess
 import re
 import os
 import tkinter as tk
 from tkinter import filedialog
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 
-GAP = 300 # ms
+GAP = 100
+BUFFER_MS = 20
+BUFFER_MS_END = 10
+
+def _msgbox(title="", message=""):
+    """
+    Displays a messagebox with the specified title and message.
+    
+    Args:
+    - title: A string representing the title of the messagebox.
+    - message: A string representing the message to be displayed.
+    Example usage:
+    # create_messagebox("Greeting", "Hello, World!")
+    """
+    root = Tk()
+    root.attributes('-topmost', True)  # Keep the messagebox on top
+    root.withdraw()  # Hide the main Tk window
+    showinfo(title, message)
+    root.destroy()
+
 
 def final_segment_non_silence(input_video, last_silence_end, cut_files):
     final_segment = "final_segment.mp4"
@@ -14,7 +38,6 @@ def final_segment_non_silence(input_video, last_silence_end, cut_files):
         "-y",
         "-i", input_video,
         "-ss", last_silence_end.replace(',', '.'),
-        "-c", "copy",
         final_segment
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -23,6 +46,7 @@ def final_segment_non_silence(input_video, last_silence_end, cut_files):
 
         
 def select(formats="*.srt", format_name="SRT files"):
+    _msgbox(formats, format_name)
     root = tk.Tk()
     root.withdraw()  # Hide main window
     root.call('wm', 'attributes', '.', '-topmost', '1')
@@ -36,55 +60,120 @@ def select(formats="*.srt", format_name="SRT files"):
     return srt_path
 
 
-# Parse subtitles to find silences
-def parse_subtitles(subtitle_text):
-    timestamps = re.findall(r'(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})', subtitle_text)
+def process_pair(pair):
+    current_end, next_start = pair
+    # Assuming convert_to_ms function is defined elsewhere
+    current_end_ms = convert_to_ms(current_end)
+    next_start_ms = convert_to_ms(next_start)
+
+    if next_start_ms - current_end_ms > GAP:
+        return (current_end, next_start)
+    return None
+
+
+def find_silences(timestamps):
     silences = []
 
-    for i in range(len(timestamps) - 1):
-        current_end = timestamps[i][1]
-        next_start = timestamps[i + 1][0]
+    # Preparing pairs of current end and next start timestamps
+    pairs = [(timestamps[i][1], timestamps[i + 1][0])
+             for i in range(len(timestamps) - 1)]
 
-        # Convert times to milliseconds
-        current_end_ms = convert_to_ms(current_end)
-        next_start_ms = convert_to_ms(next_start)
+    with ThreadPoolExecutor() as executor:
+        results = executor.map(process_pair, pairs)
 
-        # Check if silence is more than 300ms
-        if next_start_ms - current_end_ms > GAP:
-            silences.append((current_end, timestamps[i + 1][0]))
+    # Filter out None results and append to silences
+    silences.extend(filter(None, results))
 
     return silences
 
+
+def convert_to_ms(time_str):
+    """Converts time string to milliseconds."""
+    hours, minutes, seconds = map(float, time_str.replace(',', ':').split(':'))
+    return ((hours * 60 + minutes) * 60 + seconds) * 1000
+
+
+def process_pair(pair):
+    """Process a single pair to find silence."""
+    current_end, next_start = pair
+    current_end_ms = convert_to_ms(current_end) 
+    next_start_ms = convert_to_ms(next_start) 
+
+    if next_start_ms - current_end_ms > GAP:
+        return (current_end, next_start)
+    return None
+
+
+def find_silences(timestamps):
+    """Finds silences based on given timestamps."""
+    pairs = [(timestamps[i][1], timestamps[i + 1][0])
+             for i in range(len(timestamps) - 1)]
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = executor.map(process_pair, pairs)
+
+    # Filtering None values and return the list of silences
+    return list(filter(None, results))
+    
+    
+def parse_subtitles(subtitle_text):
+    """Parse subtitles to find silences using timestamps."""
+    # Find all timestamps in the subtitle text
+    timestamps = re.findall(
+        r'(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})', subtitle_text)
+    
+    # Use the find_silences function to find silences
+    silences = find_silences(timestamps)
+
+    return silences
+
+
 def convert_to_ms(timestamp):
-    hours, minutes, seconds_milliseconds = re.split('[:]', timestamp)
-    seconds, milliseconds = (seconds_milliseconds + ",0").split(',')[:2]
-    return int(hours) * 3600000 + int(minutes) * 60000 + int(seconds) * 1000 + int(milliseconds)
+    if ':' in timestamp:
+        parts = timestamp.replace(',', '.').split(':')
+        hours, minutes, seconds = map(float, parts)
+        milliseconds = int(hours * 3600 * 1000 + minutes *
+                           60 * 1000 + seconds * 1000)
+        return milliseconds
+    else:
+        return int(float(timestamp.replace(',', '.')) * 1000)
+
 
 def process_video(silences, input_video):
     cut_files = []
-    silence_end_previous = "0"
+    out = Path(input_video).parent / "output"
+    out.mkdir(exist_ok=True)
+    silence_end_previous = "0"  # Initialize variable
+    for i, (start_silence, end_silence) in enumerate(silences, start=1):
+        start_buffered = str(convert_to_ms(
+            silence_end_previous) / 1000 + BUFFER_MS / 1000)  # Adding buffer to start time
+        # Ending before the silent period ends
+        end_buffered = str(convert_to_ms(end_silence) /
+                           1000 - BUFFER_MS_END / 1000)
 
-    for i, (start_cut, end_cut) in enumerate(silences, start=1):
-        output_file = f"segment_{i}.mp4"
+        output_file = str(out / f"segment_{i}.mp4")
         cmd = [
             "ffmpeg",
             "-y",
+            "-ss", start_buffered,
+            "-to", end_buffered,
             "-i", input_video,
-            "-ss", silence_end_previous.replace(',', '.'),
-            "-to", start_cut.replace(',', '.'),
-            "-c", "copy",
             output_file
         ]
         subprocess.run(cmd, check=True)
-        silence_end_previous = end_cut
+        silence_end_previous = end_silence.replace(
+            ',', '.')  # Update end of last processed silence
         cut_files.append(output_file)
-    
-    # Always attempt to include a final segment if it exists
-    final_segment_non_silence(input_video, silence_end_previous.replace(',', '.'), cut_files)
-    
-    combine_videos(cut_files, "final_output.mp4")
 
+    # Adjust function call to match
+    final_segment_non_silence(input_video, silence_end_previous, cut_files)
+
+    combine_videos(cut_files, "final_output.mp4")
+    
+    
 def combine_videos(video_files, output_file):
+    if Path(output_file).is_file():
+        os.remove(output_file)
     with open('file_list.txt', 'w') as f:
         for file in video_files:
             f.write(f"file '{file}'\n")
@@ -94,14 +183,14 @@ def combine_videos(video_files, output_file):
         "-f", "concat",
         "-safe", "0",
         "-i", "file_list.txt",
-        "-c", "copy",
         output_file
     ]
     subprocess.run(cmd, check=True)
 
     # Cleanup
-    for file in video_files:
-        os.remove(file)
+    #  for file in video_files:
+    #     os.remove(file)
+    print(f'video_files: {video_files}')
     os.remove("file_list.txt")
 
 def read_subtitles(inputfile):
@@ -111,7 +200,11 @@ def read_subtitles(inputfile):
 
 
 def main():
-    silences = parse_subtitles(read_subtitles(select()))
+    silences = parse_subtitles(
+        read_subtitles(
+            select()
+            )
+        )
     if not silences:
         print("No silences detected, processing complete.")
     else:

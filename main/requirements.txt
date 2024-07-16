@@ -1,18 +1,14 @@
 stable-ts
-torch==2.0.1 
-torchvision==0.15.2 
-torchaudio==2.0.2 
-pyinstaller
 moviepy
-scipy
-pydub
 soundfile
-noisereduce
-setuptools
+pydub
 wave
-faster-whisper
-# torch==2.0.1 
-# torchvision==0.15.2 
-# torchaudio==2.0.2
+scipy
+numpy
+librosa
+noisereduce
 numpy==1.26.4
+torch 
+torchvision 
+torchaudio 
 --index-url https://download.pytorch.org/whl/cu118

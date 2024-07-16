@@ -13,8 +13,8 @@ from censorship import *
 import re
 from datetime import datetime, timedelta
 
-MODEL_SIZE = 'base'
-
+MODEL_SIZE = 'large-v3'
+SPLIT_IN_MS = 90
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
 
@@ -24,7 +24,7 @@ def clean_path(path_str):
     clean_name = re.sub(r'_+', '_', clean_name)
     return path.with_stem(clean_name)
 
-def split_audio(audio_file, output_dir, segment_duration=60):
+def split_audio(audio_file, output_dir, segment_duration=SPLIT_IN_MS):
     """
     Splits an audio file into segments of a specified duration using ffmpeg,
     and saves them in the provided output directory. Returns a list of paths
@@ -41,8 +41,6 @@ def split_audio(audio_file, output_dir, segment_duration=60):
 
     audio_path = clean_path(audio_file)
     output_dir = audio_path.parent
-    output_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy(str(audio_file), str(audio_path))
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     output_pattern = str(
         output_dir / f"{audio_path.stem}_{timestamp}_%03d.wav")
@@ -142,7 +140,7 @@ def select_audio_or_video():
             print(str(e))
         folder.mkdir(parents=True, exist_ok=True)
         av_new = str(folder / Path(av_path).name)
-        shutil.copy(av_path, av_new)
+        shutil.copy(av_path, clean_path(av_new))
         return av_new, video_bi
     return None, video_bi['status']
 
@@ -212,8 +210,12 @@ class AudioTranscriber:
         """
         Initialize the transcriber with a specific model size and device.
         """
-        self.model = stable_whisper.load_model(model_size,
-                                               device=device)
+        try:
+            self.model = stable_whisper.load_model(model_size,
+                                      device=device)
+        except Exception as e:
+            print(f"Error loading model: {e}\n\nDont panick, I got this. \n\nYou should really use nvidia for good results.")
+            self.model = stable_whisper.load_model('base', device='cpu')
         self.audio_paths = []
         self.index = len(self.audio_paths) - 1
         self.clean_audio_paths = []
