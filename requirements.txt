@@ -1,16 +1,19 @@
-git+https://github.com/jianfch/stable-ts.git
+--extra-index-url https://download.pytorch.org/whl/cu118
+setuptools
+pyinstaller
+stable-ts
+torch==2.0.1 
+torchvision==0.15.2 
+torchaudio==2.0.2 
 moviepy
 scipy
 pydub
 soundfile
 noisereduce
 wave
+pysrt
 faster-whisper
---index-url https://download.pytorch.org/whl/cu118
 # torch==2.0.1 
 # torchvision==0.15.2 
 # torchaudio==2.0.2
 numpy==1.26.4
-torch==2.0.1 
-torchvision==0.15.2 
-torchaudio==2.0.2 
