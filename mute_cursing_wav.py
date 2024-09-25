@@ -352,6 +352,8 @@ def main():
     comb_path = combine_wav_files(transcriber.clean_audio_paths)
     transcriber.srt_combine(transcriber.srt_paths)
     transcriber.srt_combine(transcriber.srt_paths_small)
+    for i in enums:
+        os.remove(i)
     if video_['status']:
         add_audio_to_video(video_['path'], comb_path, video_['path'].replace('.mp4', '_clean.mp4'))
     
