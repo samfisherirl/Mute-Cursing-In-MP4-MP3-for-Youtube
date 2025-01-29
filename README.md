@@ -1,5 +1,12 @@
 # Mute curse words in videos
  
+## Requires 
+
+- Python 3.10
+- https://pytorch.org/get-started/locally/
+- ffmpeg https://github.com/icedterminal/ffmpeg-installer/releases/download/6.1.1.20240201/FFmpeg_Full.msi
+- run one-click-installer.bat
+
 ### Setup Guide: 
 
 - download: https://github.com/samfisherirl/Mute-Cursing-In-MP4-MP3-for-Youtube/archive/refs/heads/main.zip
@@ -18,13 +25,6 @@
 https://github.com/user-attachments/assets/3eeb2839-48f0-4137-a6fa-a2a285e2585f
 
 
-
-## Requires 
-
-- Python 3.10
-- https://pytorch.org/get-started/locally/
-- ffmpeg https://github.com/icedterminal/ffmpeg-installer/releases/download/6.1.1.20240201/FFmpeg_Full.msi
-- run one-click-installer.bat
 
 ## Concept 
 
