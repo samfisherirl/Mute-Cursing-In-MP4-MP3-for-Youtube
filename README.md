@@ -8,7 +8,7 @@
 - Find a permanate place for the app and unzip main.zip, click and run `one-click-installer.bat`
 - First run will require a download that takes a short bit.  
 - Or venv + pip install -r requirements.txt
-- For the first time, skip transcript and click no. Then select an mp3 or mp4 file
+- For the first time, skip transcript and click no. Then select an wav or mp4 file
 - output to same relative path
 
 # Example 
@@ -29,7 +29,7 @@ https://github.com/user-attachments/assets/3eeb2839-48f0-4137-a6fa-a2a285e2585f
 ## Concept 
 
 1) convert mp4/mp3 to wav
-2) read mp3 transcript with openai wisper via stable-ts
+2) read wav transcript with openai wisper via stable-ts
 3) read csv of curse words
 4) if curse word found matching a word in a sentence, mute that word
 5) convert back to mp3
