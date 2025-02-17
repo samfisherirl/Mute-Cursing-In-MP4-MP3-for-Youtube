@@ -13,6 +13,7 @@
 - download and install (if you dont have python 310): https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe
 - During install, make sure to click "add to PATH": https://miro.medium.com/v2/resize:fit:1344/0*7nOyowsPsGI19pZT.png
 - Find a permanate place for the app and unzip main.zip, click and run `one-click-installer.bat`
+- Create a new file called "curse_words.csv" with single curse words, one per line. 
 - First run will require a download that takes a short bit.  
 - Or venv + pip install -r requirements.txt
 - For the first time, skip transcript and click no. Then select an wav or mp4 file
