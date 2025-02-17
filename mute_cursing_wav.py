@@ -51,6 +51,8 @@ def split_audio(audio_file, output_dir, segment_duration=SPLIT_IN_MS):
     output_pattern = str(output_dir / f"{audio_path.stem}_{timestamp}_%03d.wav")
     cmd = [
         "ffmpeg",
+        "-hwaccel",
+        "auto",  # Enable hardware acceleration
         "-i",
         str(audio_path),
         "-f",
@@ -58,12 +60,14 @@ def split_audio(audio_file, output_dir, segment_duration=SPLIT_IN_MS):
         "-y",
         "-segment_time",
         str(segment_duration),
-        "-c",
-        "copy",
-        "-vn",
+        "-c:a",
+        "pcm_s16le",  # Uncompressed audio for best quality
+        "-ac",
+        "2",
+        "-ar",
+        "44100",
         output_pattern,
     ]
-
     try:
         result = subprocess.run(
             cmd, check=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True
@@ -74,7 +78,6 @@ def split_audio(audio_file, output_dir, segment_duration=SPLIT_IN_MS):
     except subprocess.CalledProcessError as e:
         print(f"Failed to split audio: {e.stderr}")
         return []
-
     segment_files = sorted(output_dir.glob(f"{audio_path.stem}_{timestamp}_*.wav"))
     return [str(file) for file in segment_files]
 
@@ -105,23 +108,16 @@ def select_audio_or_video():
             title="Select A/V files", filetypes=[("A/V files", "*.mp3 *.wav *.mp4")]
         )
         root.destroy()
+        if not av_path:
+            return None, False
         temp = copy_file_with_time_stamp(av_path)
         video_bi = {"status": False, "path": ""}
         video_path = ""
-
         if "mp4" in av_path or "mov" in av_path:
             ext = av_path[av_path.rfind(".") :]
-            with open(os.getcwd() + "\\command.bat", "w") as f:
-                f.write(
-                    f'ffmpeg -hwaccel auto -i "{av_path}" -y -v error -vcodec libx264 -filter:v fps=30 -global_quality 25 -crf 27 -preset ultrafast -c:a aac -b:a 128k -ac 2 -ar 44100 -map 0:v? -map 0:s? -map 0:a? -stats -threads 2 "{temp}"'
-                )
-            subprocess.run("cmd /c command.bat", text=True)
-            av_path = temp
-            video_path = av_path
-            av_path = convert_video_to_audio(av_path, av_path.replace(".mp4", ".wav"))
             video_bi["status"] = True
-            video_bi["path"] = video_path
-
+            video_bi["path"] = av_path
+            av_path = convert_video_to_audio(av_path, av_path.replace(".mp4", ".wav"))
         if av_path:
             print(f"Audio/Video file selected: {av_path}")
             folder = Path(av_path).parent / Path(av_path).stem
@@ -134,7 +130,6 @@ def select_audio_or_video():
             av_new = str(folder / Path(av_path).name)
             shutil.copy(av_path, clean_path(av_new))
             return av_new, video_bi
-
         return None, video_bi["status"]
 
 
@@ -167,7 +162,16 @@ def convert_video_to_audio(video_file, audio_output):
 
 
 def remove_audio_from_video(video_file, video_output):
-    cmd = ["ffmpeg", "-y", "-i", video_file, "-c:v", "copy", "-an", video_output]
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        video_file,
+        "-c:v",
+        "copy",
+        "-an",  # Remove audio
+        video_output,
+    ]
     subprocess.run(cmd, check=True)
 
 
@@ -186,13 +190,38 @@ def combine_txt_files(txtfiles):
 def add_audio_to_video(video_file, audio_file, output_video):
     video_no_audio = video_file.replace(".mp4", "temp_.mp4")
     remove_audio_from_video(video_file, video_no_audio)
-    with open(os.getcwd() + "\\command.bat", "w") as f:
-        f.write(
-            f'ffmpeg -hwaccel auto -i "{video_no_audio}" -i "{audio_file}" -y -v error -vcodec libx264 -filter:v fps=30 -global_quality 25 -crf 27 -preset ultrafast -c:a aac -b:a 128k -ac 2 -ar 44100 -map 0:v? -map 0:s? -map 0:a? -stats -threads 2 -strict experimental "{output_video}"'
-        )
+    cmd = [
+        "ffmpeg",
+        "-hwaccel",
+        "auto",
+        "-i",
+        video_no_audio,
+        "-i",
+        audio_file,
+        "-y",
+        "-vcodec",
+        "libx264",
+        "-preset",
+        "fast",  # Balanced preset for speed and quality
+        "-crf",
+        "23",  # Lower CRF for better quality
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",  # Higher bitrate for improved audio quality
+        "-ac",
+        "2",
+        "-ar",
+        "44100",
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        output_video,
+    ]
     if os.path.exists(output_video):
         os.remove(output_video)
-    subprocess.run("cmd /c command.bat", text=True)
+    subprocess.run(cmd, text=True, check=True)
     os.remove(video_no_audio)
 
 
@@ -309,7 +338,7 @@ class AudioTranscriber:
         resultSmall = result
         result.split_by_length(max_chars=42)
         self.save_transcription(audio_path, result)
-        resultSmall.split_by_length(max_chars=28)
+        resultSmall.split_by_length(max_chars=35)
         self.save_transcription(audio_path, resultSmall, True)
         aud, self.clean_json = self.censor_cursing(audio_path)
         self.clean_audio_paths.append(aud)
@@ -329,23 +358,53 @@ def select_files():
 
 
 def process_files(av_paths):
-    """Process each selected file, perform conversion, run command scripts and manage directories."""
     results = []
     for av_path in av_paths:
         temp = copy_file_with_time_stamp(av_path)
         video_bi = {"status": False, "path": ""}
         if "mp4" in av_path or "mov" in av_path:
             ext = av_path[av_path.rfind(".") :]
-            with open(os.getcwd() + "\\command.bat", "w") as f:
-                f.write(
-                    f'ffmpeg -hwaccel auto -i "{av_path}" -y -v error -vcodec libx264 -filter:v fps=30 -global_quality 25 -crf 27 -preset ultrafast -c:a aac -b:a 128k -ac 2 -ar 44100 -map 0:v? -map 0:s? -map 0:a? -stats -threads 2 "{temp}"'
+            cmd = [
+                "ffmpeg",
+                "-hwaccel",
+                "auto",  # Enable hardware acceleration
+                "-i",
+                av_path,
+                "-y",  # Overwrite output files without asking
+                "-vcodec",
+                "libx264",
+                "-preset",
+                "fast",  # Use a fast preset for better balance
+                "-crf",
+                "23",  # Use a lower CRF for improved quality
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",  # Higher audio bitrate for better quality
+                "-ac",
+                "2",
+                "-ar",
+                "44100",
+                temp,
+            ]
+            try:
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    stderr=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    text=True,
                 )
-            subprocess.run("cmd /c command.bat", text=True)
-            av_path = temp
-            video_path = av_path
-            av_path = convert_video_to_audio(av_path, av_path.replace(".mp4", ".wav"))
-            video_bi["status"] = True
-            video_bi["path"] = video_path
+                av_path = temp
+                video_path = av_path
+                av_path = convert_video_to_audio(
+                    av_path, av_path.replace(".mp4", ".wav")
+                )  # Convert to audio
+                video_bi["status"] = True
+                video_bi["path"] = video_path
+            except subprocess.CalledProcessError as e:
+                print(f"Error processing file {av_path}: {e.stderr}")
+                results.append((None, video_bi))
 
         if av_path:
             print(f"Audio/Video file selected: {av_path}")
@@ -360,7 +419,7 @@ def process_files(av_paths):
             shutil.copy(av_path, clean_path(av_new))
             results.append((av_new, video_bi))
         else:
-            results.append((None, video_bi["status"]))
+            results.append((None, video_bi))
     return results
 
 
