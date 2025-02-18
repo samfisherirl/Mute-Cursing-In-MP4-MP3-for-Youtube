@@ -488,6 +488,7 @@ def main(audio_path, video_):
 
 def handler():
     file_paths = select_files()
+    print('the init process can take a moment, please be patient. starting now.')
     processed_data = process_files(file_paths)
 
     def process_audio_files(audio_paths, videos_):
