@@ -45,10 +45,13 @@ def copy_file_with_time_stamp(file_path):
 
 
 def split_audio(audio_file, output_dir, segment_duration=SPLIT_IN_MS):
+    # Prepare paths and output pattern
     audio_path = clean_path(audio_file)
     output_dir = audio_path.parent
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     output_pattern = str(output_dir / f"{audio_path.stem}_{timestamp}_%03d.wav")
+
+    # Command for splitting the audio
     cmd = [
         "ffmpeg",
         "-hwaccel",
@@ -68,16 +71,16 @@ def split_audio(audio_file, output_dir, segment_duration=SPLIT_IN_MS):
         "44100",
         output_pattern,
     ]
+
+    # Execute the command with ffmpeg output directly to the console
     try:
-        result = subprocess.run(
-            cmd, check=True, stderr=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-        )
-        print("STDOUT:", result.stdout)
-        print("STDERR:", result.stderr)
+        subprocess.run(cmd, check=True)
         print(f"Audio has been successfully split and saved to {output_dir}")
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to split audio: {e.stderr}")
+    except subprocess.CalledProcessError:
+        print("Failed to split audio.")
         return []
+
+    # Return sorted list of segment files
     segment_files = sorted(output_dir.glob(f"{audio_path.stem}_{timestamp}_*.wav"))
     return [str(file) for file in segment_files]
 
@@ -221,7 +224,7 @@ def add_audio_to_video(video_file, audio_file, output_video):
     ]
     if os.path.exists(output_video):
         os.remove(output_video)
-    subprocess.run(cmd, text=True, check=True)
+    subprocess.run(cmd, text=True)
     os.remove(video_no_audio)
 
 
@@ -390,10 +393,7 @@ def process_files(av_paths):
             try:
                 subprocess.run(
                     cmd,
-                    check=True,
-                    stderr=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    text=True,
+                    check=True
                 )
                 av_path = temp
                 video_path = av_path
